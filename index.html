@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Monitor de Gotejo</title>
+<style>
+  :root{
+    --cacau-900:#2B1810; --cacau-800:#3E2723; --cacau-700:#4E342E;
+    --folha-600:#5C7A3F; --folha-500:#7C9A5C; --folha-100:#EAF0E1;
+    --areia-50:#FAF6EF; --areia-100:#F1E9DA; --linha-cor:#DDD2BE;
+    --texto:#2B1810; --texto-suave:#6B5C50;
+    --vermelho:#B3402E; --vermelho-bg:#F7DAD3;
+    --laranja:#C97A2B; --laranja-bg:#F6E3C6;
+    --verde:#3E7A3F; --verde-bg:#DCEBD8;
+    --radius:14px; --shadow:0 2px 10px rgba(43,24,16,0.10);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--areia-50); color:var(--texto); padding-bottom:88px; -webkit-font-smoothing:antialiased;
+  }
+  .app-header{
+    background:linear-gradient(155deg,var(--cacau-900),var(--cacau-700)); color:var(--areia-50);
+    padding:18px 20px 20px; position:sticky; top:0; z-index:20; box-shadow:var(--shadow);
+  }
+  .app-header .eyebrow{text-transform:uppercase; letter-spacing:.12em; font-size:10.5px; color:var(--folha-500); font-weight:700; margin:0 0 3px;}
+  .app-header h1{margin:0; font-size:19px; font-weight:800; letter-spacing:-0.01em; display:flex; align-items:center; gap:8px;}
+  .app-header .drop{width:14px; height:14px; background:var(--folha-500); border-radius:0 60% 60% 60%; transform:rotate(45deg); flex:none;}
+  .offline-pill{display:inline-flex; align-items:center; gap:5px; margin-top:7px; font-size:10.5px; font-weight:700; background:rgba(124,154,92,.22); color:var(--folha-500); padding:3px 9px; border-radius:999px;}
+  .offline-pill .dot{width:6px; height:6px; border-radius:50%; background:var(--folha-500);}
+
+  main{padding:16px; max-width:640px; margin:0 auto;}
+  .card{background:#fff; border:1px solid var(--linha-cor); border-radius:var(--radius); padding:16px; margin-bottom:14px; box-shadow:var(--shadow);}
+  .section-title{font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.09em; color:var(--folha-600); margin:0 0 12px; display:flex; align-items:center; gap:8px;}
+  .section-title::after{content:""; flex:1; height:1px; background:var(--linha-cor);}
+
+  label{display:block; font-size:13px; font-weight:600; color:var(--texto-suave); margin:14px 0 6px;}
+  label:first-of-type{margin-top:0;}
+  label .hint{font-weight:400; font-style:italic; color:#9C8E80; font-size:12px;}
+
+  input[type=text], input[type=number], input[type=date], select, textarea{
+    width:100%; padding:12px 13px; font-size:16px; border:1.5px solid var(--linha-cor); border-radius:10px;
+    background:var(--areia-50); color:var(--texto); font-family:inherit;
+  }
+  input:focus, select:focus, textarea:focus{outline:none; border-color:var(--folha-500); background:#fff; box-shadow:0 0 0 3px var(--folha-100);}
+  textarea{min-height:56px; resize:vertical;}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+
+  .ponto-block{border-top:1px solid var(--linha-cor); padding-top:14px; margin-top:14px;}
+  .ponto-block:first-child{border-top:none; padding-top:0; margin-top:0;}
+  .ponto-label{display:flex; align-items:center; gap:7px; font-size:13px; font-weight:800; color:var(--cacau-800); margin:0 0 4px;}
+  .ponto-label .dot{width:8px; height:8px; border-radius:50%; background:var(--folha-500);}
+
+  .linha-block{border:1.5px solid var(--linha-cor); border-radius:12px; padding:14px; margin-bottom:12px;}
+  .linha-title{display:flex; align-items:center; gap:7px; font-size:14px; font-weight:800; color:var(--cacau-800); margin:0 0 10px;}
+  .linha-title .dot{width:9px; height:9px; border-radius:50%; background:var(--laranja);}
+
+  .achado-chip{
+    display:flex; align-items:center; gap:10px; background:var(--areia-50); border-radius:10px;
+    padding:8px 10px; margin-bottom:8px;
+  }
+  .achado-chip img{width:36px; height:36px; border-radius:6px; object-fit:cover; flex:none;}
+  .achado-chip .info{flex:1; min-width:0;}
+  .achado-chip .tipo{font-size:12.5px; font-weight:800; color:var(--cacau-800);}
+  .achado-chip .motivo{font-size:11.5px; color:var(--texto-suave);}
+  .achado-chip .rm{background:none; border:none; color:var(--vermelho); font-size:18px; font-weight:700; padding:0 4px; flex:none;}
+
+  .mini-form{background:var(--areia-100); border-radius:10px; padding:12px; margin-top:4px;}
+  .add-btn{width:100%; padding:11px; background:var(--folha-600); color:#fff; border:none; border-radius:9px; font-size:13px; font-weight:800; margin-top:10px;}
+
+  .photo-box{margin-top:6px; border:1.5px dashed var(--linha-cor); border-radius:10px; padding:10px; text-align:center; background:#fff;}
+  .photo-box img{max-width:100%; max-height:100px; border-radius:8px; display:block; margin:0 auto 6px;}
+  .photo-btn{display:inline-flex; align-items:center; gap:6px; background:var(--folha-600); color:#fff; border:none; padding:8px 14px; border-radius:999px; font-size:12px; font-weight:700;}
+  .photo-remove{margin-top:6px; background:none; border:none; color:var(--vermelho); font-size:11.5px; font-weight:700; display:block; margin-left:auto; margin-right:auto;}
+
+  .save-btn{width:100%; padding:15px; background:var(--folha-600); color:#fff; border:none; border-radius:12px; font-size:15px; font-weight:800; box-shadow:0 4px 14px rgba(92,122,63,0.35);}
+  .save-btn:active{transform:translateY(1px);}
+
+  .tabbar{position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid var(--linha-cor); display:flex; z-index:30; padding-bottom:env(safe-area-inset-bottom);}
+  .tabbar button{flex:1; border:none; background:none; padding:9px 1px 8px; font-size:9.5px; font-weight:700; color:#B3A797; display:flex; flex-direction:column; align-items:center; gap:3px;}
+  .tabbar button .ic{width:18px; height:18px;}
+  .tabbar button.active{color:var(--folha-600);}
+
+  .view{display:none;}
+  .view.active{display:block;}
+
+  .seg{display:flex; background:var(--areia-100); border-radius:10px; padding:3px; margin-bottom:14px;}
+  .seg button{flex:1; border:none; background:none; padding:9px; border-radius:8px; font-size:13px; font-weight:700; color:var(--texto-suave);}
+  .seg button.active{background:#fff; color:var(--cacau-800); box-shadow:0 1px 4px rgba(0,0,0,.08);}
+
+  .visita-card{background:#fff; border:1px solid var(--linha-cor); border-radius:var(--radius); padding:14px; margin-bottom:12px; box-shadow:var(--shadow);}
+  .visita-top{display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
+  .visita-valve{font-size:16px; font-weight:800; color:var(--cacau-800);}
+  .visita-meta{font-size:12px; color:var(--texto-suave); margin-top:2px;}
+  .badge{font-size:11px; font-weight:800; padding:4px 9px; border-radius:999px; white-space:nowrap;}
+  .badge-ok{background:var(--verde-bg); color:var(--verde);}
+  .badge-atencao{background:var(--vermelho-bg); color:var(--vermelho);}
+
+  .ponto-row{background:var(--areia-50); border-radius:10px; padding:10px 12px; margin-top:10px;}
+  .ponto-row-top{display:flex; justify-content:space-between; align-items:center;}
+  .ponto-row-title{font-size:12.5px; font-weight:800; color:var(--cacau-800); display:flex; align-items:center; gap:6px;}
+  .ponto-row-title .dot{width:7px; height:7px; border-radius:50%; background:var(--folha-500);}
+  .ponto-vals{display:flex; gap:10px; flex-wrap:wrap; margin-top:6px;}
+  .ponto-vals span{font-size:11.5px; color:var(--texto-suave);}
+  .ponto-vals b{color:var(--texto); font-variant-numeric:tabular-nums;}
+  .flag{font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:7px; background:var(--laranja-bg); color:var(--laranja); display:inline-block; margin-top:6px;}
+
+  .entry-obs{margin-top:10px; font-size:12px; color:var(--texto-suave); font-style:italic;}
+  .entry-actions{margin-top:10px; text-align:right;}
+  .del-btn{background:none; border:none; color:var(--vermelho); font-size:12px; font-weight:700;}
+
+  .empty{text-align:center; padding:50px 20px; color:var(--texto-suave);}
+  .empty .drop-big{width:44px; height:44px; background:var(--linha-cor); border-radius:0 60% 60% 60%; transform:rotate(45deg); margin:0 auto 14px;}
+
+  .filter-row{display:flex; gap:8px; margin-bottom:14px;}
+  .filter-row select{flex:1;}
+
+  table.resumo{width:100%; border-collapse:collapse; font-size:12.5px;}
+  table.resumo th{text-align:left; font-size:9.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--texto-suave); padding:8px 5px; border-bottom:2px solid var(--linha-cor);}
+  table.resumo td{padding:9px 5px; border-bottom:1px solid var(--linha-cor); font-weight:600;}
+  table.resumo tr:last-child td{border-bottom:none;}
+  .pri-alta{color:var(--vermelho); font-weight:800;}
+  .pri-media{color:var(--laranja); font-weight:800;}
+  .pri-baixa{color:var(--verde); font-weight:800;}
+
+  .export-stat{display:flex; align-items:baseline; gap:8px; margin-bottom:4px;}
+  .export-stat .n{font-size:28px; font-weight:800; color:var(--cacau-800);}
+  .export-stat .l{font-size:12px; color:var(--texto-suave);}
+  .export-btn{width:100%; padding:14px; background:var(--cacau-800); color:#fff; border:none; border-radius:12px; font-size:14px; font-weight:800; margin-top:12px;}
+  .export-note{font-size:11.5px; color:var(--texto-suave); margin-top:10px; line-height:1.5;}
+  .danger-btn{width:100%; padding:13px; background:none; border:1.5px solid var(--vermelho); color:var(--vermelho); border-radius:12px; font-size:13.5px; font-weight:700; margin-top:14px;}
+
+  .toast{position:fixed; bottom:98px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--cacau-900); color:#fff; padding:11px 20px; border-radius:999px; font-size:13px; font-weight:600; opacity:0; pointer-events:none; transition:all .25s ease; z-index:40; box-shadow:0 6px 20px rgba(0,0,0,.25);}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <p class="eyebrow">Cacau · Irrigação por gotejo</p>
+  <h1><span class="drop"></span> Monitor de Gotejo</h1>
+  <span class="offline-pill"><span class="dot"></span> Funciona 100% offline neste aparelho</span>
+</div>
+
+<main>
+
+  <!-- VIEW: VAZAO -->
+  <div class="view active" id="view-vazao">
+    <div class="card">
+      <p class="section-title">Identificação</p>
+      <label>Válvula</label>
+      <select id="v-valvula"></select>
+      <label>Data</label>
+      <input type="date" id="v-data">
+    </div>
+
+    <div class="card">
+      <p class="section-title">Vazão e CE — Início / Meio / Fim</p>
+      <div id="vazao-pontos"></div>
+    </div>
+
+    <div class="card">
+      <label>Observações <span class="hint">(da leitura)</span></label>
+      <textarea id="v-obs" placeholder="opcional"></textarea>
+    </div>
+
+    <button class="save-btn" id="btn-salvar-vazao">Salvar leitura (3 pontos)</button>
+  </div>
+
+  <!-- VIEW: ACHADOS -->
+  <div class="view" id="view-achados">
+    <div class="card">
+      <p class="section-title">Identificação</p>
+      <label>Válvula</label>
+      <select id="a-valvula"></select>
+      <label>Data</label>
+      <input type="date" id="a-data">
+    </div>
+
+    <div id="linhas-wrap"></div>
+
+    <div class="card">
+      <label>Observações <span class="hint">(da inspeção)</span></label>
+      <textarea id="a-obs" placeholder="opcional"></textarea>
+    </div>
+
+    <button class="save-btn" id="btn-salvar-achados">Salvar achados desta visita</button>
+  </div>
+
+  <!-- VIEW: HISTORICO -->
+  <div class="view" id="view-historico">
+    <div class="seg" id="hist-seg">
+      <button class="active" data-tipo="vazao">Vazão</button>
+      <button data-tipo="achados">Achados</button>
+    </div>
+    <div class="filter-row">
+      <select id="filtro-valvula"><option value="">Todas as válvulas</option></select>
+    </div>
+    <div id="historico-list"></div>
+  </div>
+
+  <!-- VIEW: RESUMO -->
+  <div class="view" id="view-resumo">
+    <div class="card">
+      <p class="section-title">Prioridade por válvula</p>
+      <div style="overflow-x:auto;">
+        <table class="resumo" id="resumo-table">
+          <thead><tr><th>Válvula</th><th>Leituras</th><th>Tend.</th><th>Achados</th><th>Prioridade</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- VIEW: EXPORTAR -->
+  <div class="view" id="view-exportar">
+    <div class="card">
+      <p class="section-title">Sincronização com Google Sheets</p>
+      <label>URL do Apps Script (Web App)</label>
+      <input type="text" id="f-script-url" placeholder="https://script.google.com/macros/s/....../exec">
+      <button class="add-btn" id="btn-salvar-url" style="margin-top:10px;">Salvar URL</button>
+      <div class="export-stat" style="margin-top:16px;"><span class="n" id="sync-pending">0</span><span class="l">registro(s) ainda não<br>sincronizado(s)</span></div>
+      <button class="export-btn" id="btn-sincronizar">⟳ Sincronizar agora</button>
+      <p class="export-note">Toda vez que você salva uma leitura, o app já tenta enviar sozinho para a planilha (se houver internet). Sem internet, os dados ficam guardados aqui e são enviados automaticamente na próxima vez que o app abrir com conexão.</p>
+    </div>
+    <div class="card">
+      <p class="section-title">Vazão, CE e Pressão</p>
+      <div class="export-stat"><span class="n" id="export-count-vazao">0</span><span class="l">registros salvos<br>(pontos medidos)</span></div>
+      <button class="export-btn" id="btn-export-vazao">⬇ Baixar planilha de Vazão (Excel/CSV)</button>
+    </div>
+    <div class="card">
+      <p class="section-title">Achados (furos, cortes, entupimentos)</p>
+      <div class="export-stat"><span class="n" id="export-count-achados">0</span><span class="l">achados registrados</span></div>
+      <button class="export-btn" id="btn-export-achados">⬇ Baixar planilha de Achados (Excel/CSV)</button>
+      <p class="export-note">As fotos não vão dentro do CSV — mas se a sincronização com o Google Sheets estiver ativa, as fotos são salvas no Google Drive e o link aparece na planilha.</p>
+    </div>
+    <div class="card">
+      <button class="danger-btn" id="btn-limpar">Apagar todos os registros deste aparelho</button>
+    </div>
+  </div>
+
+</main>
+
+<div class="tabbar">
+  <button class="tab-btn active" data-view="vazao">
+    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2c4 5 7 8.5 7 12a7 7 0 1 1-14 0c0-3.5 3-7 7-12z"/></svg>
+    Vazão
+  </button>
+  <button class="tab-btn" data-view="achados">
+    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M10.3 3.9L2.7 18a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" stroke-linejoin="round"/></svg>
+    Achados
+  </button>
+  <button class="tab-btn" data-view="historico">
+    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16" stroke-linecap="round"/></svg>
+    Histórico
+  </button>
+  <button class="tab-btn" data-view="resumo">
+    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M12 20V4M20 20v-7" stroke-linecap="round"/></svg>
+    Resumo
+  </button>
+  <button class="tab-btn" data-view="exportar">
+    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 19h16" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Exportar
+  </button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ================== CONFIG ==================
+const SETORES = ["VA","VB","VC","VD"];
+const VALVULAS = [];
+SETORES.forEach(s => { for (let i=1;i<=15;i++) VALVULAS.push(s+i); });
+
+const PONTOS_VAZAO = [
+  {label:'Início', slug:'inicio'},
+  {label:'Meio', slug:'meio'},
+  {label:'Fim', slug:'fim'},
+];
+const LINHAS = [
+  {label:'Linha 1', slug:'linha1'},
+  {label:'Linha 33', slug:'linha33'},
+  {label:'Linha 66', slug:'linha66'},
+];
+const TIPOS_ACHADO = ['Gotejo entupido','Mangueira furada','Mangueira cortada'];
+const MOTIVOS_POR_TIPO = {
+  'Gotejo entupido': ['Sedimento/areia','Alga/biofilme','Sais/precipitado','Outro'],
+  'Mangueira furada': ['Furo - inseto/praga','Furo - desgaste do gotejador','Furo - roedor','Outro'],
+  'Mangueira cortada': ['Corte - ferramenta/roçadeira','Corte - animal/roedor','Corte - vandalismo','Outro'],
+};
+const THRESH = { tendencia: -0.15 };
+
+const KEY_VAZAO = 'monitor_gotejo_vazao_v2';
+const KEY_ACHADOS = 'monitor_gotejo_achados_v2';
+const KEY_SCRIPT_URL = 'monitor_gotejo_script_url';
+
+let achadosTemp = { linha1:[], linha33:[], linha66:[] };
+let fotoTemp = { linha1:null, linha33:null, linha66:null };
+
+// ================== STORAGE (offline, neste aparelho) ==================
+function loadVazao(){ try{ const r=localStorage.getItem(KEY_VAZAO); return r?JSON.parse(r):[]; }catch(e){ return []; } }
+function saveVazaoAll(arr){ try{ localStorage.setItem(KEY_VAZAO, JSON.stringify(arr)); return true; }catch(e){ return false; } }
+function loadAchados(){ try{ const r=localStorage.getItem(KEY_ACHADOS); return r?JSON.parse(r):[]; }catch(e){ return []; } }
+function saveAchadosAll(arr){ try{ localStorage.setItem(KEY_ACHADOS, JSON.stringify(arr)); return true; }catch(e){ return false; } }
+function getScriptUrl(){ return localStorage.getItem(KEY_SCRIPT_URL) || ''; }
+function setScriptUrl(url){ localStorage.setItem(KEY_SCRIPT_URL, url); }
+
+// ================== SINCRONIZAÇÃO COM GOOGLE SHEETS ==================
+async function enviarRegistro(tipo, registro){
+  const url = getScriptUrl();
+  if (!url) return false;
+  try{
+    const resp = await fetch(url, {
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ tipo, registro })
+    });
+    const json = await resp.json();
+    return json && json.status === 'ok';
+  }catch(e){
+    return false;
+  }
+}
+async function sincronizarPendentes(silencioso){
+  const url = getScriptUrl();
+  if (!url) { if(!silencioso) showToast('Cole a URL do Apps Script em Exportar > Sincronização'); return; }
+
+  let vazaoRecs = loadVazao();
+  let achadoRecs = loadAchados();
+  let enviados = 0, falhas = 0;
+
+  for (const r of vazaoRecs){
+    if (!r.synced){
+      const ok = await enviarRegistro('vazao', r);
+      if (ok){ r.synced = true; enviados++; } else { falhas++; }
+    }
+  }
+  saveVazaoAll(vazaoRecs);
+
+  for (const r of achadoRecs){
+    if (!r.synced){
+      const ok = await enviarRegistro('achado', r);
+      if (ok){ r.synced = true; enviados++; } else { falhas++; }
+    }
+  }
+  saveAchadosAll(achadoRecs);
+
+  renderExportStats();
+  if (enviados>0) showToast(enviados+' registro(s) sincronizado(s) com a planilha ✓');
+  else if (falhas>0 && !silencioso) showToast('Sem conexão com a planilha agora — os dados continuam salvos aqui');
+}
+function countPendentes(){
+  return loadVazao().filter(r=>!r.synced).length + loadAchados().filter(r=>!r.synced).length;
+}
+
+// ================== INIT UI ==================
+function populateValvulaSelects(){
+  [document.getElementById('v-valvula'), document.getElementById('a-valvula'), document.getElementById('filtro-valvula')].forEach(sel=>{
+    SETORES.forEach(s=>{
+      const og = document.createElement('optgroup');
+      og.label = 'Setor ' + s.slice(1);
+      for (let i=1;i<=15;i++){
+        const opt = document.createElement('option');
+        opt.value = s+i; opt.textContent = s+i;
+        og.appendChild(opt);
+      }
+      sel.appendChild(og);
+    });
+  });
+}
+function setToday(){
+  const hoje = new Date().toISOString().slice(0,10);
+  document.getElementById('v-data').value = hoje;
+  document.getElementById('a-data').value = hoje;
+}
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+// ================== VAZÃO: form ==================
+function buildVazaoPontos(){
+  const wrap = document.getElementById('vazao-pontos');
+  wrap.innerHTML = PONTOS_VAZAO.map(p => `
+    <div class="ponto-block">
+      <p class="ponto-label"><span class="dot"></span>${p.label}</p>
+      <div class="grid2">
+        <div>
+          <label>Volume coletado <span class="hint">(L)</span></label>
+          <input type="number" id="f-volume-${p.slug}" step="0.001" inputmode="decimal" placeholder="ex: 0.033">
+        </div>
+        <div>
+          <label>Tempo de coleta <span class="hint">(s)</span></label>
+          <input type="number" id="f-tempo-${p.slug}" inputmode="decimal" placeholder="ex: 60">
+        </div>
+      </div>
+      <label>CE medida <span class="hint">(mS/cm)</span></label>
+      <input type="number" id="f-ce-${p.slug}" step="0.01" inputmode="decimal">
+      ${p.slug==='fim' ? `
+      <label>Pressão no final da mangueira <span class="hint">(bar)</span></label>
+      <input type="number" id="f-pressao-fim" step="0.01" inputmode="decimal">
+      ` : ''}
+    </div>
+  `).join('');
+}
+
+function calcVazao(volume, tempo){
+  if (!volume || !tempo) return null;
+  return (parseFloat(volume) / parseFloat(tempo)) * 3600;
+}
+
+document.getElementById('btn-salvar-vazao').addEventListener('click', ()=>{
+  const valvula = document.getElementById('v-valvula').value;
+  const data = document.getElementById('v-data').value;
+  const obs = document.getElementById('v-obs').value || null;
+  if (!valvula || !data){ showToast('Preencha válvula e data'); return; }
+
+  const savedAt = new Date().toISOString();
+  const novos = PONTOS_VAZAO.map(p => ({
+    id: Date.now()+'-'+p.slug+'-'+Math.random().toString(36).slice(2,7),
+    valvula, data, ponto: p.label,
+    volume: document.getElementById('f-volume-'+p.slug).value || null,
+    tempo: document.getElementById('f-tempo-'+p.slug).value || null,
+    ce: document.getElementById('f-ce-'+p.slug).value || null,
+    pressao: p.slug==='fim' ? (document.getElementById('f-pressao-fim').value || null) : null,
+    obs, savedAt, synced:false,
+  }));
+
+  const all = novos.concat(loadVazao());
+  const ok = saveVazaoAll(all);
+  if (ok){
+    showToast('Leitura de vazão salva ✓');
+    resetVazaoForm();
+    renderHistorico(); renderResumo(); renderExportStats();
+    sincronizarPendentes(true);
+  } else {
+    showToast('Erro ao salvar — armazenamento cheio?');
+  }
+});
+function resetVazaoForm(){
+  document.getElementById('v-obs').value='';
+  PONTOS_VAZAO.forEach(p=>{
+    document.getElementById('f-volume-'+p.slug).value='';
+    document.getElementById('f-tempo-'+p.slug).value='';
+    document.getElementById('f-ce-'+p.slug).value='';
+  });
+  document.getElementById('f-pressao-fim').value='';
+  setToday();
+}
+
+// ================== ACHADOS: form ==================
+function buildLinhas(){
+  const wrap = document.getElementById('linhas-wrap');
+  wrap.innerHTML = LINHAS.map(l => `
+    <div class="linha-block">
+      <p class="linha-title"><span class="dot"></span>${l.label}</p>
+      <div id="achado-list-${l.slug}"></div>
+      <div class="mini-form">
+        <label>Tipo de problema</label>
+        <select id="f-tipo-${l.slug}">
+          ${TIPOS_ACHADO.map(t=>`<option value="${t}">${t}</option>`).join('')}
+        </select>
+        <label>Motivo</label>
+        <select id="f-motivo-${l.slug}"></select>
+        <label>Foto</label>
+        <div class="photo-box" id="photo-box-${l.slug}"></div>
+        <button type="button" class="add-btn" id="btn-add-${l.slug}">+ Adicionar achado nesta linha</button>
+      </div>
+    </div>
+  `).join('');
+
+  LINHAS.forEach(l=>{
+    document.getElementById('f-tipo-'+l.slug).addEventListener('change', ()=>populateMotivo(l.slug));
+    populateMotivo(l.slug);
+    renderPhotoBox(l.slug);
+    renderAchadoList(l.slug);
+    document.getElementById('btn-add-'+l.slug).addEventListener('click', ()=>addAchadoTemp(l.slug));
+  });
+}
+function populateMotivo(slug){
+  const tipo = document.getElementById('f-tipo-'+slug).value;
+  const sel = document.getElementById('f-motivo-'+slug);
+  sel.innerHTML = (MOTIVOS_POR_TIPO[tipo]||[]).map(m=>`<option value="${m}">${m}</option>`).join('');
+}
+function renderPhotoBox(slug){
+  const box = document.getElementById('photo-box-'+slug);
+  if (fotoTemp[slug]){
+    box.innerHTML = `<img src="${fotoTemp[slug]}">
+      <button type="button" class="photo-btn" id="photo-trigger-${slug}">📷 Trocar foto</button>
+      <button type="button" class="photo-remove" id="photo-remove-${slug}">Remover foto</button>
+      <input type="file" accept="image/*" capture="environment" id="f-foto-${slug}" style="display:none;">`;
+    document.getElementById('photo-remove-'+slug).addEventListener('click', ()=>{ fotoTemp[slug]=null; renderPhotoBox(slug); });
+  } else {
+    box.innerHTML = `<button type="button" class="photo-btn" id="photo-trigger-${slug}">📷 Tirar / anexar foto</button>
+      <input type="file" accept="image/*" capture="environment" id="f-foto-${slug}" style="display:none;">`;
+  }
+  document.getElementById('photo-trigger-'+slug).addEventListener('click', ()=>document.getElementById('f-foto-'+slug).click());
+  document.getElementById('f-foto-'+slug).addEventListener('change', (e)=>handleFotoChange(e, slug));
+}
+function handleFotoChange(e, slug){
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const maxW = 400;
+      const scale = Math.min(1, maxW / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      fotoTemp[slug] = canvas.toDataURL('image/jpeg', 0.55);
+      renderPhotoBox(slug);
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function addAchadoTemp(slug){
+  const tipo = document.getElementById('f-tipo-'+slug).value;
+  const motivo = document.getElementById('f-motivo-'+slug).value;
+  achadosTemp[slug].push({ tipo, motivo, foto: fotoTemp[slug] });
+  fotoTemp[slug] = null;
+  document.getElementById('f-tipo-'+slug).selectedIndex = 0;
+  populateMotivo(slug);
+  renderPhotoBox(slug);
+  renderAchadoList(slug);
+  showToast('Achado adicionado à '+LINHAS.find(l=>l.slug===slug).label);
+}
+function renderAchadoList(slug){
+  const wrap = document.getElementById('achado-list-'+slug);
+  const items = achadosTemp[slug];
+  if (!items.length){ wrap.innerHTML=''; return; }
+  wrap.innerHTML = items.map((a,i)=>`
+    <div class="achado-chip">
+      ${a.foto ? '<img src="'+a.foto+'">' : ''}
+      <div class="info"><div class="tipo">${a.tipo}</div><div class="motivo">${a.motivo}</div></div>
+      <button type="button" class="rm" data-slug="${slug}" data-i="${i}">×</button>
+    </div>
+  `).join('');
+  wrap.querySelectorAll('.rm').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      achadosTemp[btn.dataset.slug].splice(parseInt(btn.dataset.i),1);
+      renderAchadoList(btn.dataset.slug);
+    });
+  });
+}
+
+document.getElementById('btn-salvar-achados').addEventListener('click', ()=>{
+  const valvula = document.getElementById('a-valvula').value;
+  const data = document.getElementById('a-data').value;
+  const obs = document.getElementById('a-obs').value || null;
+  if (!valvula || !data){ showToast('Preencha válvula e data'); return; }
+
+  const totalAchados = LINHAS.reduce((sum,l)=>sum+achadosTemp[l.slug].length, 0);
+  if (totalAchados===0){ showToast('Adicione ao menos um achado antes de salvar'); return; }
+
+  const savedAt = new Date().toISOString();
+  const novos = [];
+  LINHAS.forEach(l=>{
+    achadosTemp[l.slug].forEach(a=>{
+      novos.push({
+        id: Date.now()+'-'+l.slug+'-'+Math.random().toString(36).slice(2,7),
+        valvula, data, linha: l.label,
+        tipo: a.tipo, motivo: a.motivo, foto: a.foto,
+        obs, savedAt, synced:false,
+      });
+    });
+  });
+
+  const all = novos.concat(loadAchados());
+  const ok = saveAchadosAll(all);
+  if (ok){
+    showToast('Achados salvos ✓ ('+totalAchados+')');
+    resetAchadosForm();
+    renderHistorico(); renderResumo(); renderExportStats();
+    sincronizarPendentes(true);
+  } else {
+    showToast('Erro ao salvar — armazenamento cheio?');
+  }
+});
+function resetAchadosForm(){
+  document.getElementById('a-obs').value='';
+  achadosTemp = { linha1:[], linha33:[], linha66:[] };
+  fotoTemp = { linha1:null, linha33:null, linha66:null };
+  LINHAS.forEach(l=>{
+    document.getElementById('f-tipo-'+l.slug).selectedIndex = 0;
+    populateMotivo(l.slug);
+    renderPhotoBox(l.slug);
+    renderAchadoList(l.slug);
+  });
+  setToday();
+}
+
+// ================== TENDÊNCIA (comparação com leitura anterior) ==================
+function findAnteriorVazao(records, valvula, ponto, dataAtual, idAtual){
+  const cand = records.filter(r=>r.valvula===valvula && r.ponto===ponto && r.id!==idAtual && r.data < dataAtual);
+  if (!cand.length) return null;
+  cand.sort((a,b)=> a.data < b.data ? 1 : -1);
+  return calcVazao(cand[0].volume, cand[0].tempo);
+}
+function tendenciaStatus(vazao, anterior){
+  if (vazao==null || !anterior) return null;
+  const v = (vazao-anterior)/anterior;
+  if (v <= THRESH.tendencia) return 'Queda de tendência';
+  return null;
+}
+
+// ================== HISTÓRICO ==================
+let histTipo = 'vazao';
+document.querySelectorAll('#hist-seg button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('#hist-seg button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    histTipo = btn.dataset.tipo;
+    renderHistorico();
+  });
+});
+document.getElementById('filtro-valvula').addEventListener('change', renderHistorico);
+
+function formatDate(iso){ if(!iso) return ''; const [y,m,d]=iso.split('-'); return d+'/'+m+'/'+y; }
+
+function renderHistorico(){
+  if (histTipo==='vazao') renderHistoricoVazao(); else renderHistoricoAchados();
+}
+function renderHistoricoVazao(){
+  const records = loadVazao();
+  const filtro = document.getElementById('filtro-valvula').value;
+  const list = document.getElementById('historico-list');
+  const filtered = filtro ? records.filter(r=>r.valvula===filtro) : records;
+
+  if (!filtered.length){ list.innerHTML = '<div class="empty"><div class="drop-big"></div>Nenhuma leitura de vazão ainda.</div>'; return; }
+
+  const ordemPonto = {'Início':0,'Meio':1,'Fim':2};
+  const grupos = {};
+  filtered.forEach(r=>{ const k=r.valvula+'|'+r.data+'|'+r.savedAt; (grupos[k]=grupos[k]||[]).push(r); });
+  const chaves = Object.keys(grupos).sort((a,b)=> grupos[b][0].savedAt.localeCompare(grupos[a][0].savedAt));
+
+  list.innerHTML = chaves.map(key=>{
+    const grupo = grupos[key].sort((a,b)=>ordemPonto[a.ponto]-ordemPonto[b.ponto]);
+    const first = grupo[0];
+    let atencao = false;
+    const pontosHtml = grupo.map(r=>{
+      const vazao = calcVazao(r.volume, r.tempo);
+      const anterior = findAnteriorVazao(records, r.valvula, r.ponto, r.data, r.id);
+      const tend = tendenciaStatus(vazao, anterior);
+      if (tend) atencao = true;
+      return `<div class="ponto-row">
+        <div class="ponto-row-top"><span class="ponto-row-title"><span class="dot"></span>${r.ponto}</span></div>
+        <div class="ponto-vals">
+          <span>Vazão: <b>${vazao!=null?vazao.toFixed(2)+' L/h':'—'}</b></span>
+          <span>CE: <b>${r.ce?r.ce+' mS/cm':'—'}</b></span>
+          ${r.ponto==='Fim' ? '<span>Pressão: <b>'+(r.pressao?r.pressao+' bar':'—')+'</b></span>' : ''}
+        </div>
+        ${tend ? '<span class="flag">'+tend+'</span>' : ''}
+      </div>`;
+    }).join('');
+    return `<div class="visita-card">
+      <div class="visita-top">
+        <div><div class="visita-valve">${first.valvula}</div><div class="visita-meta">${formatDate(first.data)}</div></div>
+        <span class="badge ${atencao?'badge-atencao':'badge-ok'}">${atencao?'Atenção':'OK'}</span>
+      </div>
+      ${pontosHtml}
+      ${first.obs?'<div class="entry-obs">"'+first.obs+'"</div>':''}
+      <div class="entry-actions"><button class="del-btn" data-key="${key}">Excluir leitura</button></div>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.del-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const [valvula,data,savedAt] = btn.dataset.key.split('|');
+      saveVazaoAll(loadVazao().filter(r=> !(r.valvula===valvula && r.data===data && r.savedAt===savedAt)));
+      showToast('Leitura excluída'); renderHistorico(); renderResumo(); renderExportStats();
+    });
+  });
+}
+function renderHistoricoAchados(){
+  const records = loadAchados();
+  const filtro = document.getElementById('filtro-valvula').value;
+  const list = document.getElementById('historico-list');
+  const filtered = filtro ? records.filter(r=>r.valvula===filtro) : records;
+
+  if (!filtered.length){ list.innerHTML = '<div class="empty"><div class="drop-big"></div>Nenhum achado registrado ainda.</div>'; return; }
+
+  const ordemLinha = {'Linha 1':0,'Linha 33':1,'Linha 66':2};
+  const grupos = {};
+  filtered.forEach(r=>{ const k=r.valvula+'|'+r.data+'|'+r.savedAt; (grupos[k]=grupos[k]||[]).push(r); });
+  const chaves = Object.keys(grupos).sort((a,b)=> grupos[b][0].savedAt.localeCompare(grupos[a][0].savedAt));
+
+  list.innerHTML = chaves.map(key=>{
+    const grupo = grupos[key].sort((a,b)=>ordemLinha[a.linha]-ordemLinha[b.linha]);
+    const first = grupo[0];
+    const itensHtml = grupo.map(r=>`
+      <div class="ponto-row">
+        <div class="ponto-row-top"><span class="ponto-row-title"><span class="dot"></span>${r.linha}</span></div>
+        <span class="flag">${r.tipo}</span>
+        <div class="entry-obs">Motivo: ${r.motivo}</div>
+        ${r.foto?'<div style="margin-top:6px;"><img src="'+r.foto+'" style="width:100%;max-height:120px;object-fit:cover;border-radius:8px;"></div>':''}
+      </div>
+    `).join('');
+    return `<div class="visita-card">
+      <div class="visita-top">
+        <div><div class="visita-valve">${first.valvula}</div><div class="visita-meta">${formatDate(first.data)}</div></div>
+        <span class="badge badge-atencao">${grupo.length} achado${grupo.length>1?'s':''}</span>
+      </div>
+      ${itensHtml}
+      ${first.obs?'<div class="entry-obs">"'+first.obs+'"</div>':''}
+      <div class="entry-actions"><button class="del-btn" data-key="${key}">Excluir</button></div>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.del-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const [valvula,data,savedAt] = btn.dataset.key.split('|');
+      saveAchadosAll(loadAchados().filter(r=> !(r.valvula===valvula && r.data===data && r.savedAt===savedAt)));
+      showToast('Registro excluído'); renderHistorico(); renderResumo(); renderExportStats();
+    });
+  });
+}
+
+// ================== RESUMO ==================
+function renderResumo(){
+  const vazaoRecs = loadVazao();
+  const achadoRecs = loadAchados();
+  const byValve = {};
+  vazaoRecs.forEach(r=>{
+    if (!byValve[r.valvula]) byValve[r.valvula] = {leituras:0, tend:0, achados:0};
+    byValve[r.valvula].leituras++;
+    const vazao = calcVazao(r.volume, r.tempo);
+    const anterior = findAnteriorVazao(vazaoRecs, r.valvula, r.ponto, r.data, r.id);
+    if (tendenciaStatus(vazao, anterior)) byValve[r.valvula].tend++;
+  });
+  achadoRecs.forEach(r=>{
+    if (!byValve[r.valvula]) byValve[r.valvula] = {leituras:0, tend:0, achados:0};
+    byValve[r.valvula].achados++;
+  });
+
+  const rows = Object.keys(byValve).sort().map(v=>{
+    const g = byValve[v];
+    let pri='Baixa', cls='pri-baixa';
+    if (g.achados>0){ pri='Alta'; cls='pri-alta'; }
+    else if (g.tend>0){ pri='Média'; cls='pri-media'; }
+    return `<tr><td>${v}</td><td>${g.leituras}</td><td>${g.tend}</td><td>${g.achados}</td><td class="${cls}">${pri}</td></tr>`;
+  });
+  document.querySelector('#resumo-table tbody').innerHTML = rows.length ? rows.join('') :
+    '<tr><td colspan="5" style="text-align:center;color:#9C8E80;padding:20px;">Sem dados ainda</td></tr>';
+}
+
+// ================== EXPORTAR ==================
+function renderExportStats(){
+  document.getElementById('export-count-vazao').textContent = loadVazao().length;
+  document.getElementById('export-count-achados').textContent = loadAchados().length;
+  document.getElementById('sync-pending').textContent = countPendentes();
+}
+document.getElementById('f-script-url').value = getScriptUrl();
+document.getElementById('btn-salvar-url').addEventListener('click', ()=>{
+  const url = document.getElementById('f-script-url').value.trim();
+  if (!url.startsWith('https://script.google.com/')){
+    showToast('Cole a URL completa que termina em /exec');
+    return;
+  }
+  setScriptUrl(url);
+  showToast('URL salva ✓');
+  sincronizarPendentes(true);
+});
+document.getElementById('btn-sincronizar').addEventListener('click', ()=>sincronizarPendentes(false));
+function csvEscape(v){
+  if (v==null) return '';
+  const s = String(v);
+  if (/[",\n;]/.test(s)) return '"'+s.replace(/"/g,'""')+'"';
+  return s;
+}
+function baixarCsv(nomeArquivo, header, linhasArr){
+  const csv = '\uFEFF' + header.join(';') + '\n' + linhasArr.map(l=>l.map(csvEscape).join(';')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = nomeArquivo;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById('btn-export-vazao').addEventListener('click', ()=>{
+  const records = loadVazao();
+  if (!records.length){ showToast('Nenhum dado de vazão para exportar'); return; }
+  const header = ['Data','Válvula','Ponto','Volume coletado (L)','Tempo de coleta (s)','Vazão calculada (L/h)','CE medida (mS/cm)','Pressão (bar)','Alerta de tendência','Observações'];
+  const ordemPonto = {'Início':0,'Meio':1,'Fim':2};
+  const ordenados = [...records].sort((a,b)=>{
+    if (a.valvula!==b.valvula) return a.valvula.localeCompare(b.valvula);
+    if (a.data!==b.data) return a.data.localeCompare(b.data);
+    return ordemPonto[a.ponto]-ordemPonto[b.ponto];
+  });
+  const linhasArr = ordenados.map(r=>{
+    const vazao = calcVazao(r.volume, r.tempo);
+    const anterior = findAnteriorVazao(records, r.valvula, r.ponto, r.data, r.id);
+    const tend = tendenciaStatus(vazao, anterior);
+    return [r.data, r.valvula, r.ponto, r.volume??'', r.tempo??'', vazao!=null?vazao.toFixed(2):'', r.ce??'', r.pressao??'', tend??'OK', r.obs??''];
+  });
+  const hoje = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  baixarCsv('vazao_irrigacao_'+hoje+'.csv', header, linhasArr);
+  showToast('Planilha de vazão baixada ✓');
+});
+
+document.getElementById('btn-export-achados').addEventListener('click', ()=>{
+  const records = loadAchados();
+  if (!records.length){ showToast('Nenhum achado para exportar'); return; }
+  const header = ['Data','Válvula','Linha','Tipo','Motivo','Foto anexada?','Observações'];
+  const ordemLinha = {'Linha 1':0,'Linha 33':1,'Linha 66':2};
+  const ordenados = [...records].sort((a,b)=>{
+    if (a.valvula!==b.valvula) return a.valvula.localeCompare(b.valvula);
+    if (a.data!==b.data) return a.data.localeCompare(b.data);
+    return ordemLinha[a.linha]-ordemLinha[b.linha];
+  });
+  const linhasArr = ordenados.map(r=>[r.data, r.valvula, r.linha, r.tipo, r.motivo, r.foto?'Sim':'Não', r.obs??'']);
+  const hoje = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  baixarCsv('achados_irrigacao_'+hoje+'.csv', header, linhasArr);
+  showToast('Planilha de achados baixada ✓');
+});
+
+document.getElementById('btn-limpar').addEventListener('click', ()=>{
+  if (confirm('Apagar TODOS os registros (vazão e achados) deste aparelho? Essa ação não pode ser desfeita. Exporte antes se quiser manter uma cópia.')){
+    saveVazaoAll([]); saveAchadosAll([]);
+    showToast('Todos os registros foram apagados');
+    renderHistorico(); renderResumo(); renderExportStats();
+  }
+});
+
+// ================== NAVEGAÇÃO ==================
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById('view-'+btn.dataset.view).classList.add('active');
+    if (btn.dataset.view==='historico') renderHistorico();
+    if (btn.dataset.view==='resumo') renderResumo();
+    if (btn.dataset.view==='exportar') renderExportStats();
+  });
+});
+
+// ================== INIT ==================
+populateValvulaSelects();
+setToday();
+buildVazaoPontos();
+buildLinhas();
+renderExportStats();
+if (getScriptUrl()) sincronizarPendentes(true);
+window.addEventListener('online', ()=>sincronizarPendentes(true));
+</script>
+</body>
+</html>
