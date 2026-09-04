@@ -1,6 +1,6 @@
 // Service worker do app de Monitoramento de Irrigação (Cacau & Coco)
 // Lembrete: suba este número de versão a cada atualização publicada.
-const CACHE_NAME = 'irrigacao-cacau-coco-v1.2';
+const CACHE_NAME = 'irrigacao-cacau-coco-v1.4';
 const ASSETS = [
   './',
   './index.html',
@@ -36,6 +36,26 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+
+  const isHTML = event.request.mode === 'navigate'
+    || (event.request.headers.get('accept') || '').includes('text/html');
+
+  if (isHTML) {
+    // HTML: tenta a rede primeiro, pra nunca travar numa versão antiga do app.
+    // Só usa o cache se estiver offline.
+    event.respondWith(
+      fetch(event.request)
+        .then((resp) => {
+          const copy = resp.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          return resp;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Demais arquivos (ícones, manifest etc.): cache primeiro, atualiza em segundo plano.
   event.respondWith(
     caches.match(event.request).then((cached) => {
       const network = fetch(event.request)

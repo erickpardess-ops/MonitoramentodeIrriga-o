@@ -280,7 +280,7 @@
 
 <script>
 /* ---------------- STATE ---------------- */
-const APP_VERSION = '1.3';
+const APP_VERSION = '1.4';
 let state = { view:'home', setorId:null, valvIdx:0, setores:[], cocoFiltro:'todos', webAppUrl:'https://script.google.com/macros/s/AKfycby2fY9XUmx0jv0MLQwJoFuefXs2UfjO7zYonZKmdPUhAuqHemnlSGTB9jOAtbjVFJI/exec' };
 
 function uid(){ return 's' + Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4); }
@@ -658,11 +658,22 @@ async function sendToSheets(){
       headers:{'Content-Type':'text/plain;charset=utf-8'},
       body: JSON.stringify(payload)
     });
-    const json = await res.json();
-    if(json && json.ok) showToast('Dados enviados ao Google Sheets!');
-    else showToast('Erro no envio: '+(json&&json.error?json.error:'verifique o Code.gs'));
+    const text = await res.text();
+    let json = null;
+    try{ json = JSON.parse(text); }catch(e){}
+    if(json && json.ok){
+      showToast('Dados enviados ao Google Sheets!');
+    } else if(json && json.ok===false){
+      alert('O Google Apps Script recebeu os dados, mas retornou um erro:\n\n'+json.error);
+    } else {
+      alert('O envio chegou ao Google, mas a resposta não foi o JSON esperado (status HTTP '+res.status+').\n\n'
+        +'As causas mais comuns são:\n'
+        +'• A implantação do Web App não está com "Quem pode acessar: Qualquer pessoa"\n'
+        +'• Você editou o Code.gs depois do deploy e não criou uma "Nova versão" em Gerenciar implantações\n\n'
+        +'Início da resposta recebida:\n'+text.slice(0,300));
+    }
   }catch(err){
-    showToast('Falha ao enviar — sem internet ou URL incorreta');
+    alert('Falha de rede ao tentar enviar: '+err.message+'\n\nConfira sua conexão com a internet e se a URL colada termina em "/exec".');
   }
 }
 function configurarWebAppUrl(){
