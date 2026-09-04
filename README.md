@@ -49,6 +49,23 @@ A planilha vai ganhar automaticamente 4 abas na primeira vez que você enviar da
 > campo continua 100% offline, você só precisa estar online na hora de tocar em
 > "Enviar para Google Sheets".
 
+### Deu "Failed to fetch" / "Falha de rede ao tentar enviar"?
+
+Antes de mais nada, toque em **🧪 Testar link do Sheets** — ele faz um teste simples
+e te diz exatamente o que está errado. As causas mais comuns, em ordem de frequência:
+
+1. **A implantação não está pública.** No Apps Script, vá em
+   **Implantar → Gerenciar implantações → ✏️ (editar)** e confira se
+   "Quem pode acessar" está como **"Qualquer pessoa"** — não "Qualquer pessoa com
+   Conta Google" (esse exige login e quebra o envio automático do app).
+2. **Editou o `Code.gs` depois de implantar.** Salvar o script sozinho não atualiza
+   a URL já publicada — é preciso ir em **Gerenciar implantações → editar → Nova
+   versão** toda vez que o código mudar.
+3. **Teste manual:** cole a URL (a que termina em `/exec`) direto numa aba nova do
+   navegador. Se aparecer um texto tipo `{"ok":true,...}`, o Web App está no ar e
+   público. Se pedir login do Google ou der erro, o problema é a implantação (itens
+   1 ou 2 acima).
+
 > Dica: a URL do Google Sheets fica salva na memória do app durante o uso, mas se
 > você fechar o navegador ela é perdida — por isso ela também é guardada dentro do
 > backup `.json` que o app exporta. Ao importar esse backup de novo, a URL volta

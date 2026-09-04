@@ -1,6 +1,6 @@
 // Service worker do app de Monitoramento de Irrigação (Cacau & Coco)
 // Lembrete: suba este número de versão a cada atualização publicada.
-const CACHE_NAME = 'irrigacao-cacau-coco-v1.4';
+const CACHE_NAME = 'irrigacao-cacau-coco-v1.5';
 const ASSETS = [
   './',
   './index.html',

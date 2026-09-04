@@ -280,7 +280,7 @@
 
 <script>
 /* ---------------- STATE ---------------- */
-const APP_VERSION = '1.4';
+const APP_VERSION = '1.5';
 let state = { view:'home', setorId:null, valvIdx:0, setores:[], cocoFiltro:'todos', webAppUrl:'https://script.google.com/macros/s/AKfycby2fY9XUmx0jv0MLQwJoFuefXs2UfjO7zYonZKmdPUhAuqHemnlSGTB9jOAtbjVFJI/exec' };
 
 function uid(){ return 's' + Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4); }
@@ -683,6 +683,33 @@ function configurarWebAppUrl(){
     showToast(state.webAppUrl ? 'URL salva (inclua no backup JSON para não perder)' : 'URL removida');
   }
 }
+async function testarWebAppUrl(){
+  if(!state.webAppUrl){ showToast('Configure a URL do Google Sheets primeiro'); return; }
+  showToast('Testando link…');
+  try{
+    const res = await fetch(state.webAppUrl, { method:'GET' });
+    const text = await res.text();
+    let json = null;
+    try{ json = JSON.parse(text); }catch(e){}
+    if(json && json.ok){
+      alert('Conexão OK! O Web App respondeu corretamente:\n\n'+text);
+    } else {
+      alert('O link respondeu (status HTTP '+res.status+'), mas não é o JSON esperado.\n\n'
+        +'Se o texto abaixo parecer uma página de login do Google, mude a implantação para\n'
+        +'"Quem pode acessar: Qualquer pessoa" (não "Qualquer pessoa com Conta Google").\n\n'
+        +'Início da resposta:\n'+text.slice(0,300));
+    }
+  }catch(err){
+    alert('Não foi possível nem conectar (erro: '+err.message+').\n\n'
+      +'Passos para checar:\n'
+      +'1) Abra a URL colada direto numa aba nova do navegador — ela deve mostrar um texto\n'
+      +'   JSON tipo {"ok":true,...}, sem pedir login.\n'
+      +'2) Se pedir login do Google, volte no Apps Script → Gerenciar implantações → edite a\n'
+      +'   implantação → "Quem pode acessar" deve estar como "Qualquer pessoa".\n'
+      +'3) Se você editou o Code.gs depois de implantar, é preciso criar uma "Nova versão"\n'
+      +'   na implantação — só salvar o script não atualiza a URL publicada.');
+  }
+}
 function importJSON(file){
   const reader = new FileReader();
   reader.onload = e=>{
@@ -752,6 +779,7 @@ function renderHome(){
       <button class="btn-ghost" id="btnExpCSV">📊 Exportar planilha (.csv)</button>
       <button class="btn-ghost" id="btnImp">📥 Importar backup</button>
       <button class="btn-ghost" id="btnConfigSheets">🔗 Configurar Google Sheets</button>
+      <button class="btn-ghost" id="btnTestarSheets">🧪 Testar link do Sheets</button>
       <button class="btn-ghost" id="btnEnviarSheets" style="border-color:var(--forest);color:var(--forest);">☁️ Enviar para Google Sheets</button>
     </div>
   `;
@@ -812,6 +840,7 @@ function renderHome(){
   document.getElementById('btnExpCSV').onclick = exportCSV;
   document.getElementById('btnImp').onclick = ()=>document.getElementById('fileInput').click();
   document.getElementById('btnConfigSheets').onclick = configurarWebAppUrl;
+  document.getElementById('btnTestarSheets').onclick = testarWebAppUrl;
   document.getElementById('btnEnviarSheets').onclick = sendToSheets;
   app.querySelectorAll('.setor-row').forEach(row=>{
     const id = row.dataset.id;
