@@ -1,0 +1,1855 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Monitoramento de Irrigação — Cacau &amp; Coco</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2F4A2C">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<style>
+  :root{
+    --bg:#F6F4EC;
+    --surface:#FFFFFF;
+    --surface-2:#EFEBDD;
+    --ink:#1E2A1B;
+    --ink-soft:#5A6653;
+    --forest:#2F4A2C;
+    --forest-dark:#1F3320;
+    --forest-light:#4C7A46;
+    --gold:#B8862E;
+    --danger:#A6362B;
+    --danger-bg:#F6E6E3;
+    --ok:#3E7C42;
+    --ok-bg:#E7F0E3;
+    --pending:#9A9484;
+    --pending-bg:#EDEAE0;
+    --line:#DAD4C2;
+    --radius:10px;
+    --font-head: 'Arial Narrow', 'Roboto Condensed', 'Helvetica Neue', Arial, sans-serif;
+    --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+    --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--font-body);
+    -webkit-tap-highlight-color:transparent;
+    padding-bottom:48px;
+  }
+  h1,h2,h3,h4{font-family:var(--font-head);font-weight:800;letter-spacing:0.2px;margin:0;}
+  button{font-family:var(--font-body);cursor:pointer;}
+  input,textarea,select{font-family:var(--font-body);}
+  :focus-visible{outline:3px solid var(--gold);outline-offset:1px;}
+
+  header.app{
+    background:var(--forest);
+    color:#fff;
+    padding:16px 16px 20px;
+    position:sticky;top:0;z-index:20;
+    box-shadow:0 2px 8px rgba(0,0,0,0.15);
+  }
+  header.app .top-row{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  header.app h1{font-size:1.15rem;text-transform:uppercase;letter-spacing:0.5px;}
+  header.app .subtitle{font-size:0.75rem;color:#CFE0C9;margin-top:2px;font-family:var(--font-mono);}
+  .icon-btn{
+    background:rgba(255,255,255,0.12);
+    border:1px solid rgba(255,255,255,0.25);
+    color:#fff;border-radius:8px;padding:8px 10px;font-size:0.78rem;font-weight:600;
+    display:flex;align-items:center;gap:6px;white-space:nowrap;
+  }
+  .icon-btn:active{background:rgba(255,255,255,0.25);}
+
+  main{max-width:720px;margin:0 auto;padding:16px;}
+
+  .card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:16px;
+    margin-bottom:14px;
+  }
+
+  /* HOME */
+  .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;}
+  .stat{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:12px 10px;text-align:center;
+  }
+  .stat .num{font-family:var(--font-head);font-size:1.6rem;font-weight:800;color:var(--forest);}
+  .stat .lbl{font-size:0.68rem;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px;}
+
+  .btn-primary{
+    background:var(--forest);color:#fff;border:none;border-radius:8px;
+    padding:14px 18px;font-weight:700;font-size:0.95rem;width:100%;
+  }
+  .btn-primary:active{background:var(--forest-dark);}
+  .btn-secondary{
+    background:var(--surface);color:var(--forest);border:1.5px solid var(--forest);border-radius:8px;
+    padding:10px 14px;font-weight:700;font-size:0.85rem;
+  }
+  .btn-ghost{
+    background:transparent;border:1px solid var(--line);color:var(--ink-soft);
+    border-radius:8px;padding:8px 12px;font-size:0.8rem;font-weight:600;
+  }
+  .btn-danger-outline{
+    background:transparent;border:1px solid var(--danger);color:var(--danger);
+    border-radius:8px;padding:8px 12px;font-size:0.78rem;font-weight:700;
+  }
+
+  .setor-row{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px;margin-bottom:10px;
+  }
+  .setor-row .info h3{font-size:1rem;}
+  .setor-row .info .meta{font-size:0.75rem;color:var(--ink-soft);font-family:var(--font-mono);margin-top:3px;}
+  .badge{
+    display:inline-flex;align-items:center;gap:4px;border-radius:20px;padding:3px 9px;
+    font-size:0.7rem;font-weight:700;font-family:var(--font-mono);
+  }
+  .badge.ok{background:var(--ok-bg);color:var(--ok);}
+  .badge.danger{background:var(--danger-bg);color:var(--danger);}
+  .badge.pending{background:var(--pending-bg);color:var(--pending);}
+  .badge.dupla{background:#EFE3C8;color:var(--gold);}
+
+  .empty-state{
+    text-align:center;padding:40px 20px;color:var(--ink-soft);
+  }
+  .empty-state .pod{font-size:2.4rem;margin-bottom:8px;}
+
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+
+  /* SETOR EDITOR */
+  .field-row{margin-bottom:12px;}
+  .field-row label{display:block;font-size:0.72rem;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px;}
+  .field-row input[type=text], .field-row input[type=date], .field-row input[type=number], .field-row textarea, .field-row select{
+    width:100%;border:1.5px solid var(--line);border-radius:8px;padding:10px 12px;font-size:0.95rem;
+    background:var(--surface);color:var(--ink);
+  }
+  .field-row textarea{resize:vertical;min-height:56px;}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .grid-4{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+
+  .back-link{
+    display:inline-flex;align-items:center;gap:6px;color:#fff;font-size:0.85rem;font-weight:700;
+    background:none;border:none;padding:0;margin-bottom:4px;
+  }
+
+  .tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;}
+  .tab{
+    flex:1;min-width:70px;text-align:center;padding:10px 6px;border-radius:8px;border:1.5px solid var(--line);
+    background:var(--surface);font-weight:700;font-size:0.8rem;color:var(--ink-soft);font-family:var(--font-mono);
+  }
+  .tab.active{background:var(--forest);border-color:var(--forest);color:#fff;}
+
+  .chip-row{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;}
+  .chip{
+    padding:6px 12px;border-radius:20px;border:1.5px solid var(--line);background:var(--surface);
+    font-size:0.75rem;font-weight:700;color:var(--ink-soft);
+  }
+  .chip.active{background:var(--forest);border-color:var(--forest);color:#fff;}
+  .modulo-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;}
+  .modulo-tile{
+    border-radius:16px;padding:22px 12px;color:#fff;text-align:center;cursor:pointer;
+    min-height:118px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.15);
+  }
+  .modulo-tile:active{filter:brightness(1.1);}
+  .modulo-emoji{font-size:2.1rem;position:relative;line-height:1;}
+  .modulo-canto{position:absolute;font-size:1.05rem;bottom:-8px;right:-16px;}
+  .modulo-titulo{font-family:var(--font-head);font-weight:800;font-size:0.82rem;line-height:1.15;margin-top:6px;}
+  .modulo-sub{font-size:0.72rem;opacity:0.9;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;}
+  .linha2-label-row{display:flex;align-items:center;gap:8px;margin:10px 0 4px;}
+  .linha2-label-row input{
+    border:1.5px solid var(--line);border-radius:6px;padding:5px 8px;font-family:var(--font-mono);
+    font-size:0.78rem;font-weight:700;color:var(--gold);width:110px;
+  }
+  .pf-trio{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
+  .nivel-select{border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:0.72rem;background:#fff;}
+
+  .section-title{
+    font-size:0.78rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--forest);
+    font-weight:800;margin:20px 0 8px;display:flex;align-items:center;gap:8px;
+  }
+  .section-title:first-child{margin-top:0;}
+  .section-title .rule{flex:1;height:1px;background:var(--line);}
+
+  .row-item{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-top:1px solid var(--line);gap:10px;}
+  .row-item:first-of-type{border-top:none;}
+  .row-item .lbl{font-size:0.82rem;font-weight:600;}
+  .row-item .lbl .sub{display:block;font-size:0.68rem;color:var(--ink-soft);font-weight:400;}
+  .switch{
+    width:42px;height:24px;border-radius:12px;background:var(--pending-bg);border:1.5px solid var(--line);
+    position:relative;flex-shrink:0;
+  }
+  .switch.on{background:var(--forest);border-color:var(--forest);}
+  .switch.danger-on{background:var(--danger);border-color:var(--danger);}
+  .switch .knob{
+    position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;
+    transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,0.3);
+  }
+  .switch.on .knob, .switch.danger-on .knob{left:20px;}
+
+  /* signature: drip line visual */
+  .dripline{
+    background:var(--surface-2);border-radius:var(--radius);padding:16px 14px 12px;margin-bottom:16px;
+  }
+  .valve-label-row{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+  .valve-label-row input{
+    flex:1;border:1.5px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--font-mono);
+    font-weight:800;font-size:1rem;color:var(--forest);background:var(--surface);
+  }
+  .ends{display:flex;flex-direction:column;gap:10px;}
+  .line-end{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px;}
+  .line-end .pos{font-family:var(--font-mono);font-size:0.7rem;color:var(--gold);font-weight:700;text-transform:uppercase;margin-bottom:6px;}
+  .pf-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .pf-col .rowlbl{font-size:0.66rem;color:var(--ink-soft);margin:4px 0 2px;font-weight:600;}
+  .pf-col input{width:100%;border:1px solid var(--line);border-radius:6px;padding:7px 8px;font-size:0.88rem;font-family:var(--font-mono);}
+  .vazao-block{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);}
+  .vazao-calc{font-size:0.72rem;color:var(--forest);font-weight:700;margin-top:4px;font-family:var(--font-mono);min-height:14px;}
+  .line-track{position:relative;height:26px;margin:14px 4px 4px;border-top:2px dashed var(--gold);}
+  .dots{position:absolute;top:-7px;left:0;right:0;display:flex;justify-content:space-between;padding:0 2px;}
+  .dot{width:13px;height:13px;border-radius:50%;background:var(--pending);border:2px solid var(--surface-2);}
+  .dot.ok{background:var(--ok);}
+  .dot.danger{background:var(--danger);}
+
+  .obs-toggle{
+    font-size:0.7rem;color:var(--forest);font-weight:700;background:none;border:none;padding:0;
+  }
+
+  .ponto-card{
+    border:1px solid var(--line);border-radius:9px;padding:11px 12px;margin-bottom:8px;background:var(--surface);
+  }
+  .ponto-card.touched.danger{border-color:var(--danger);background:var(--danger-bg);}
+  .ponto-card.touched.ok{border-color:var(--ok);background:var(--ok-bg);}
+  .ponto-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+  .ponto-head .n{font-family:var(--font-mono);font-weight:800;font-size:0.85rem;color:var(--forest);}
+  .ponto-head .status{font-size:0.65rem;font-weight:700;text-transform:uppercase;color:var(--ink-soft);}
+  .stepper{display:flex;align-items:center;gap:8px;}
+  .stepper button{
+    width:28px;height:28px;border-radius:6px;border:1.5px solid var(--forest);background:var(--surface);
+    color:var(--forest);font-size:1.05rem;font-weight:800;line-height:1;
+  }
+  .stepper .val{font-family:var(--font-mono);font-weight:800;font-size:0.95rem;min-width:18px;text-align:center;}
+  .chk-qty{display:flex;align-items:center;gap:8px;}
+  .qty-input{width:44px;border:1px solid var(--line);border-radius:6px;padding:5px;font-family:var(--font-mono);text-align:center;}
+  .tipo-select-wrap{padding:8px 0 4px;border-top:1px dashed var(--line);margin-top:2px;}
+  .tipo-select-wrap select{width:100%;border:1px solid var(--line);border-radius:6px;padding:7px 8px;font-size:0.82rem;background:#fff;}
+  .tipo-detalhe{width:100%;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:0.8rem;margin-top:6px;}
+  .ponto-obs{margin-top:8px;}
+  .ponto-obs textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:7px 8px;font-size:0.82rem;min-height:38px;}
+
+  .photo-section{margin-top:10px;padding-top:8px;border-top:1px dashed var(--line);}
+  .photo-add-btn{
+    background:var(--surface-2);border:1px dashed var(--ink-soft);color:var(--ink-soft);
+    border-radius:8px;padding:7px 10px;font-size:0.75rem;font-weight:700;display:inline-flex;align-items:center;gap:5px;
+  }
+  .photo-thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+  .photo-thumb{position:relative;width:56px;height:56px;border-radius:8px;overflow:hidden;border:1px solid var(--line);}
+  .photo-thumb img{width:100%;height:100%;object-fit:cover;}
+  .photo-thumb .rm{
+    position:absolute;top:1px;right:1px;background:rgba(0,0,0,0.55);color:#fff;border:none;
+    width:18px;height:18px;border-radius:50%;font-size:0.7rem;line-height:1;
+  }
+
+  .gap{height:8px;}
+  .footer-actions{display:flex;gap:10px;margin-top:20px;}
+  .footer-actions .btn-primary{flex:1;}
+
+  .toast{
+    position:fixed;bottom:16px;left:50%;transform:translateX(-50%);
+    background:var(--forest-dark);color:#fff;padding:10px 18px;border-radius:24px;
+    font-size:0.85rem;font-weight:600;box-shadow:0 4px 12px rgba(0,0,0,0.25);z-index:50;
+    opacity:0;pointer-events:none;transition:opacity .2s, transform .2s;
+    max-width:90vw;text-align:center;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px);}
+
+  .lightbox{
+    position:fixed;inset:0;background:rgba(10,15,8,0.92);z-index:60;
+    display:none;align-items:center;justify-content:center;padding:24px;
+  }
+  .lightbox.show{display:flex;}
+  .lightbox img{max-width:100%;max-height:85vh;border-radius:8px;}
+  .lightbox .close{position:absolute;top:16px;right:16px;background:rgba(255,255,255,0.15);color:#fff;border:none;
+    width:36px;height:36px;border-radius:50%;font-size:1.1rem;}
+
+  input[type=file]{display:none;}
+</style>
+</head>
+<body>
+
+<header class="app">
+  <div class="top-row" id="headerRow"></div>
+  <div class="subtitle" id="headerSub"></div>
+</header>
+
+<main id="app"></main>
+<div class="toast" id="toast"></div>
+<div class="lightbox" id="lightbox"><button class="close" id="lbClose">✕</button><img id="lbImg" src=""></div>
+<input type="file" id="fileInput" accept="application/json">
+
+<script>
+/* ---------------- STATE ---------------- */
+const APP_VERSION = '1.8';
+const MODULOS = [
+  { id:'irrigacao_cacau', titulo:'Monitoramento de Irrigação', sub:'Cacau', emoji:'💧', canto:'🍫', cor:'#2F4A2C', cultura:'cacau', tipo:'irrigacao' },
+  { id:'irrigacao_coco', titulo:'Monitoramento de Irrigação', sub:'Coco', emoji:'💧', canto:'🥥', cor:'#1F5A78', cultura:'coco', tipo:'irrigacao' },
+  { id:'pragas_cacau', titulo:'Monitoramento de Pragas', sub:'Cacau', emoji:'🐛', canto:'🍫', cor:'#5C3A21', cultura:'cacau', tipo:'pragas' }
+];
+function getModulo(id){ return MODULOS.find(m=>m.id===id); }
+
+let state = {
+  view:'home', modulo:null, setorId:null, valvIdx:0, setores:[], cocoFiltro:'todos',
+  webAppUrl:'https://script.google.com/macros/s/AKfycby2fY9XUmx0jv0MLQwJoFuefXs2UfjO7zYonZKmdPUhAuqHemnlSGTB9jOAtbjVFJI/exec',
+  showPragasManager:false, historicoSetorId:null, historicoTipo:null,
+  pragasTipos: [
+    {id:'p1', nome:'Broca-do-fruto (Conotrachelus)', tipo:'padrao'},
+    {id:'p2', nome:'Percevejo-de-renda', tipo:'padrao'},
+    {id:'p3', nome:'Formiga cortadeira', tipo:'padrao'},
+    {id:'p4', nome:'Podridão-parda (Phytophthora)', tipo:'padrao'},
+    {id:'p5', nome:'Vassoura-de-bruxa', tipo:'padrao'},
+    {id:'p6', nome:'Lagarta', tipo:'lagarta'}
+  ]
+};
+
+function uid(){ return 's' + Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4); }
+
+/* ---------------- MODEL ---------------- */
+function novoPonto(numero){
+  return {
+    numero,
+    gotejosEntupidos:0, gotejosDefeituosos:0,
+    corte:false, corteTipo:'objeto_cortante', corteOutrosDetalhe:'', qtdCortes:1,
+    furo:false, furoTipo:'roseta', furoOutroDetalhe:'', qtdFuros:1,
+    obs:'', fotos:[], tocado:false
+  };
+}
+function novaVazaoMedicao(){ return { volumeMl:'', minutos:'' }; }
+function novaLinha(){ return { pressaoInicial:'', pressaoFinal:'', vazaoInicial: novaVazaoMedicao(), vazaoFinal: novaVazaoMedicao() }; }
+function novoPontoPraga(numero){
+  return { numero, presencas:{}, obs:'', fotos:[], tocado:false };
+}
+function novaValvula(label){
+  return {
+    label,
+    linha1: novaLinha(),
+    linha66: novaLinha(),
+    pontos: Array.from({length:10}, (_,i)=>novoPonto(i+1)),
+    obsGeral: '', obsFotos: [],
+    pragas: Array.from({length:20}, (_,i)=>novoPontoPraga(i+1))
+  };
+}
+function novoSetor(nome){
+  return {
+    id: uid(),
+    cultura: 'cacau',
+    nome: nome || '',
+    data: new Date().toISOString().slice(0,10),
+    responsavel: '',
+    medicaoDupla: false,
+    valvulas: [novaValvula('Válvula 1'), novaValvula('Válvula 2'), novaValvula('Válvula 3')],
+    historico: []
+  };
+}
+
+/* setores e válvulas padrão do talhão de cacau, conforme numeração de campo */
+function gerarSetoresPadrao(){
+  const grupos = { A:['TA1','TA2','TA3','TA4','TA5'], B:['TB1','TB2','TB3','TB4'], C:['TC1','TC2','TC3'], D:['TD1','TD2'] };
+  const dupla = new Set(['TA1','TA2','TA3','TB2','TB3','TC2','TC3']);
+  const novos = [];
+  Object.keys(grupos).forEach(letra=>{
+    grupos[letra].forEach((codigo, idx)=>{
+      const base = idx*3;
+      const s = novoSetor(codigo);
+      s.medicaoDupla = dupla.has(codigo);
+      s.valvulas = [1,2,3].map(k=>novaValvula('V'+letra+(base+k)));
+      novos.push(s);
+    });
+  });
+  return novos;
+}
+
+/* ===================== CULTURA: COCO (coqueiro) ===================== */
+function novoPontoCoco(numero){
+  return {
+    numero,
+    microEntupido:false, causaEntupimento:'particulas', causaEntupimentoDetalhe:'',
+    microDefeito:false, tipoProblemaDefeito:'',
+    corte:false, causaCorte:'objeto_cortante', causaCorteDetalhe:'',
+    estacaInadequada:false, distanciaInadequada:false,
+    obs:'', fotos:[], tocado:false
+  };
+}
+function novaLinhaCoco(){ return { pressaoInicio:'', pressaoFinal:'' }; }
+function novaValvulaCoco(label){
+  return { label, linha1: novaLinhaCoco(), linha2: novaLinhaCoco() };
+}
+function novoSetorCoco(nome){
+  return {
+    id: uid(),
+    cultura: 'coco',
+    nome: nome || '',
+    data: new Date().toISOString().slice(0,10),
+    responsavel: '',
+    segundaLinhaLabel: 'Linha 40',
+    valvulas: [novaValvulaCoco('Válvula 1'), novaValvulaCoco('Válvula 2'), novaValvulaCoco('Válvula 3')],
+    pontos: Array.from({length:80}, (_,i)=>novoPontoCoco(i+1)),
+    obsGeral: '', obsFotos: [],
+    historico: []
+  };
+}
+/* setores e válvulas padrão da área de coco, conforme numeração de campo */
+function gerarSetoresPadraoCoco(){
+  const defs = [
+    {codigo:'A03', letra:'A', base:6}, {codigo:'A04', letra:'A', base:9},
+    {codigo:'B03', letra:'B', base:6}, {codigo:'B04', letra:'B', base:9},
+    {codigo:'C01', letra:'C', base:0}, {codigo:'C02', letra:'C', base:3}, {codigo:'C03', letra:'C', base:6}, {codigo:'C04', letra:'C', base:9},
+    {codigo:'D01', letra:'D', base:0}, {codigo:'D02', letra:'D', base:3}, {codigo:'D03', letra:'D', base:6}, {codigo:'D04', letra:'D', base:9}
+  ];
+  return defs.map(d=>{
+    const s = novoSetorCoco(d.codigo);
+    s.segundaLinhaLabel = d.letra==='D' ? 'Linha 52' : 'Linha 40';
+    s.valvulas = [1,2,3].map(k=>novaValvulaCoco(d.letra+(d.base+k)));
+    return s;
+  });
+}
+function pontoTemProblemaCoco(p){ return p.microEntupido || p.microDefeito || p.corte || p.estacaInadequada || p.distanciaInadequada; }
+function pontoStatusCoco(p){
+  if(!p.tocado) return 'pending';
+  return pontoTemProblemaCoco(p) ? 'danger' : 'ok';
+}
+
+/* ---------------- HELPERS ---------------- */
+function pontoTemProblema(p){ return p.gotejosEntupidos>0 || p.gotejosDefeituosos>0 || p.corte || p.furo; }
+function pontoStatus(p){
+  if(!p.tocado) return 'pending';
+  return pontoTemProblema(p) ? 'danger' : 'ok';
+}
+function pontoTemProblemaPraga(p){ return Object.values(p.presencas||{}).some(x=>x && x.ativo); }
+function pontoStatusPraga(p){
+  if(!p.tocado) return 'pending';
+  return pontoTemProblemaPraga(p) ? 'danger' : 'ok';
+}
+function resumoPragasValvula(v){
+  let avaliadas=0, comOcorrencia=0;
+  (v.pragas||[]).forEach(p=>{ if(p.tocado){ avaliadas++; if(pontoTemProblemaPraga(p)) comOcorrencia++; } });
+  return {avaliadas, comOcorrencia, total:(v.pragas||[]).length};
+}
+function resumoPragasSetor(setor){
+  let avaliadas=0, comOcorrencia=0, total=0;
+  (setor.valvulas||[]).forEach(v=>{
+    const r = resumoPragasValvula(v);
+    avaliadas+=r.avaliadas; comOcorrencia+=r.comOcorrencia; total+=r.total;
+  });
+  return {avaliadas, comOcorrencia, total};
+}
+function registrarHistorico(setor, tipo){
+  if(!Array.isArray(setor.historico)) setor.historico = [];
+  let entrada;
+  if(tipo==='pragas'){
+    const r = resumoPragasSetor(setor);
+    entrada = { data:setor.data, modulo:'pragas', avaliados:r.avaliadas, problemas:r.comOcorrencia, total:r.total };
+  } else {
+    const r = resumoSetor(setor);
+    entrada = { data:setor.data, modulo:'irrigacao', avaliados:r.avaliados, problemas:r.problemas, total:r.total };
+  }
+  setor.historico.push(entrada);
+  if(setor.historico.length>60) setor.historico = setor.historico.slice(-60);
+}
+function resumoSetor(setor){
+  if(setor.cultura==='coco'){
+    let avaliados=0, problemas=0;
+    setor.pontos.forEach(p=>{ if(p.tocado){ avaliados++; if(pontoTemProblemaCoco(p)) problemas++; } });
+    return {avaliados, problemas, total:setor.pontos.length};
+  }
+  let avaliados=0, problemas=0, total=0;
+  setor.valvulas.forEach(v=>{
+    v.pontos.forEach(p=>{
+      total++;
+      if(p.tocado){ avaliados++; if(pontoTemProblema(p)) problemas++; }
+    });
+  });
+  return {avaliados, problemas, total};
+}
+function resumoGlobal(){
+  let setoresN = state.setores.length, avaliados=0, problemas=0;
+  state.setores.forEach(s=>{ const r=resumoSetor(s); avaliados+=r.avaliados; problemas+=r.problemas; });
+  return {setoresN, avaliados, problemas};
+}
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t=setTimeout(()=>t.classList.remove('show'),2200);
+}
+function getSetor(id){ return state.setores.find(s=>s.id===id); }
+function migrarSetoresPragas(lista){
+  lista.forEach(s=>{
+    if(!Array.isArray(s.historico)) s.historico = [];
+    if(s.cultura==='coco') return;
+    (s.valvulas||[]).forEach(v=>{
+      if(!Array.isArray(v.pragas)){
+        v.pragas = Array.from({length:20}, (_,i)=>novoPontoPraga(i+1));
+      }
+      ['linha1','linha66'].forEach(grp=>{
+        ['vazaoInicial','vazaoFinal'].forEach(campo=>{
+          const atual = v[grp] && v[grp][campo];
+          if(!atual || typeof atual !== 'object'){
+            v[grp][campo] = novaVazaoMedicao();
+          }
+        });
+      });
+    });
+  });
+}
+
+/* ---------------- FOTOS ---------------- */
+function compressImage(file, maxDim, quality){
+  maxDim = maxDim||1000; quality = quality||0.72;
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = ev=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let w=img.width,h=img.height;
+        if(w>maxDim||h>maxDim){
+          if(w>h){ h=Math.round(h*maxDim/w); w=maxDim; } else { w=Math.round(w*maxDim/h); h=maxDim; }
+        }
+        const canvas=document.createElement('canvas');
+        canvas.width=w; canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL('image/jpeg',quality));
+      };
+      img.onerror=()=>reject(new Error('img'));
+      img.src=ev.target.result;
+    };
+    reader.onerror=()=>reject(new Error('read'));
+    reader.readAsDataURL(file);
+  });
+}
+function openLightbox(src){
+  document.getElementById('lbImg').src = src;
+  document.getElementById('lightbox').classList.add('show');
+}
+document.getElementById('lbClose').onclick = ()=>document.getElementById('lightbox').classList.remove('show');
+document.getElementById('lightbox').addEventListener('click', e=>{ if(e.target.id==='lightbox') e.currentTarget.classList.remove('show'); });
+
+function photoSectionHTML(fotos, role){
+  return `
+  <div class="photo-section" data-photo-role="${role}">
+    <button type="button" class="photo-add-btn" data-role="photo-add">📷 Adicionar foto (${fotos.length})</button>
+    <input type="file" data-role="photo-input" accept="image/*" capture="environment" multiple>
+    <div class="photo-thumbs">
+      ${fotos.map((f,i)=>`<div class="photo-thumb" data-idx="${i}"><img src="${f}"><button type="button" class="rm" data-role="photo-rm">✕</button></div>`).join('')}
+    </div>
+  </div>`;
+}
+function wirePhotoSection(container, fotosArrRef, onChange){
+  const sec = container.querySelector('[data-photo-role]');
+  if(!sec) return;
+  const addBtn = sec.querySelector('[data-role="photo-add"]');
+  const input = sec.querySelector('[data-role="photo-input"]');
+  addBtn.onclick = ()=>input.click();
+  input.addEventListener('change', async e=>{
+    const files = [...e.target.files];
+    if(files.length===0) return;
+    showToast('Processando foto...');
+    for(const f of files){
+      try{ const dataUrl = await compressImage(f); fotosArrRef.push(dataUrl); }catch(err){}
+    }
+    input.value='';
+    onChange();
+  });
+  sec.querySelectorAll('.photo-thumb img').forEach((img,i)=>{
+    img.onclick = ()=>openLightbox(fotosArrRef[i]);
+  });
+  sec.querySelectorAll('[data-role="photo-rm"]').forEach((btn,i)=>{
+    btn.onclick = ()=>{ fotosArrRef.splice(i,1); onChange(); };
+  });
+}
+
+/* ---------------- EXPORT / IMPORT ---------------- */
+function download(filename, content, type){
+  const blob = new Blob([content], {type});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=filename; document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+function exportJSON(){
+  const stamp = new Date().toISOString().slice(0,16).replace(/[-T:]/g,'');
+  download(`monitoramento-cacau-coco_${stamp}.json`, JSON.stringify({setores:state.setores, webAppUrl:state.webAppUrl, pragasTipos:state.pragasTipos}, null, 2), 'application/json');
+  showToast('Backup JSON exportado (inclui fotos)');
+}
+function csvEsc(v){
+  v = (v===undefined||v===null) ? '' : String(v);
+  if(/[;"\n]/.test(v)) v = '"'+v.replace(/"/g,'""')+'"';
+  return v;
+}
+function tipoLabel(map, key){ return map[key] || key; }
+const CORTE_LABELS = {objeto_cortante:'Objeto cortante', outros:'Outros'};
+const FURO_LABELS = {roseta:'Roseta', objeto_pontiagudo:'Objeto pontiagudo', roedores:'Roedores', outro:'Outros'};
+const ENTUP_LABELS = {particulas:'Partículas', materia_organica:'Matéria orgânica', precipitados:'Precipitados', outros:'Outros materiais'};
+const CORTE_COCO_LABELS = {objeto_cortante:'Objeto cortante', objeto_pontiagudo:'Objeto pontiagudo', outras:'Outras causas'};
+const NIVEL_LABELS = {baixa:'Baixa', media:'Média', alta:'Alta'};
+const ESTAGIO_LABELS = {0:'0 - Neonata', 1:'1', 2:'2', 3:'3', 4:'4', 5:'5 - Adulta'};
+
+function exportCSVCacau(lista){
+  const cols = ['Setor','Aferição_Dupla','Data','Responsavel','Valvula',
+    'Pressao_L1_Inicial','Vazao_L1_Inicial','Pressao_L1_Final','Vazao_L1_Final',
+    'Pressao_L66_Inicial','Vazao_L66_Inicial','Pressao_L66_Final','Vazao_L66_Final',
+    'Ponto','Ponto_Avaliado','Gotejos_Entupidos(0-4)','Gotejos_Defeituosos(0-4)',
+    'Mangueira_Cortada','Tipo_Corte','Detalhe_Corte','Qtd_Cortes',
+    'Furo_Mangueira','Tipo_Furo','Detalhe_Furo','Qtd_Furos',
+    'Qtd_Fotos_Ponto','Obs_Ponto','Obs_Geral_Valvula','Qtd_Fotos_ObsGeral'];
+  const rows=[cols.join(';')];
+  lista.forEach(s=>{
+    s.valvulas.forEach(v=>{
+      v.pontos.forEach(p=>{
+        rows.push([
+          s.nome, s.medicaoDupla?'Sim':'Nao', s.data, s.responsavel, v.label,
+          v.linha1.pressaoInicial, v.linha1.vazaoInicial, v.linha1.pressaoFinal, v.linha1.vazaoFinal,
+          v.linha66.pressaoInicial, v.linha66.vazaoInicial, v.linha66.pressaoFinal, v.linha66.vazaoFinal,
+          p.numero, p.tocado?'Sim':'Nao', p.gotejosEntupidos, p.gotejosDefeituosos,
+          p.corte?'Sim':'Nao', p.corte?tipoLabel(CORTE_LABELS,p.corteTipo):'', p.corte&&p.corteTipo==='outros'?p.corteOutrosDetalhe:'', p.corte?p.qtdCortes:0,
+          p.furo?'Sim':'Nao', p.furo?tipoLabel(FURO_LABELS,p.furoTipo):'', p.furo&&p.furoTipo==='outro'?p.furoOutroDetalhe:'', p.furo?p.qtdFuros:0,
+          p.fotos.length, p.obs, v.obsGeral, v.obsFotos.length
+        ].map(csvEsc).join(';'));
+      });
+    });
+  });
+  const stamp = new Date().toISOString().slice(0,16).replace(/[-T:]/g,'');
+  download(`monitoramento-cacau_${stamp}.csv`, '\uFEFF'+rows.join('\n'), 'text/csv;charset=utf-8');
+}
+function exportCSVCoco(lista){
+  const cols = ['Setor','2a_Linha','Data','Responsavel','Valvula',
+    'Pressao_L1_Inicio','Pressao_L1_Final',
+    'Pressao_L2_Inicio','Pressao_L2_Final',
+    'Ponto','Ponto_Avaliado',
+    'Micro_Entupido','Causa_Entupimento','Detalhe_Entupimento',
+    'Micro_Defeito','Tipo_Problema_Defeito',
+    'Mangueira_Cortada','Causa_Corte','Detalhe_Corte',
+    'Estaca_Posicao_Angulo_Inadequado','Distancia_Micro_Coqueiro_Inadequada',
+    'Qtd_Fotos_Ponto','Obs_Ponto','Obs_Geral_Setor','Qtd_Fotos_ObsGeral'];
+  const rows=[cols.join(';')];
+  lista.forEach(s=>{
+    s.valvulas.forEach(v=>{
+      rows.push([
+        s.nome, s.segundaLinhaLabel, s.data, s.responsavel, v.label,
+        v.linha1.pressaoInicio, v.linha1.pressaoFinal,
+        v.linha2.pressaoInicio, v.linha2.pressaoFinal,
+        '(pressões da válvula — ver linha de pontos abaixo p/ inspeção)','','','','','','','','','','','','','','',''
+      ].map(csvEsc).join(';'));
+    });
+    s.pontos.forEach(p=>{
+      rows.push([
+        s.nome, s.segundaLinhaLabel, s.data, s.responsavel, '',
+        '','','','',
+        p.numero, p.tocado?'Sim':'Nao',
+        p.microEntupido?'Sim':'Nao', p.microEntupido?tipoLabel(ENTUP_LABELS,p.causaEntupimento):'', p.microEntupido&&p.causaEntupimento==='outros'?p.causaEntupimentoDetalhe:'',
+        p.microDefeito?'Sim':'Nao', p.microDefeito?p.tipoProblemaDefeito:'',
+        p.corte?'Sim':'Nao', p.corte?tipoLabel(CORTE_COCO_LABELS,p.causaCorte):'', p.corte&&p.causaCorte==='outras'?p.causaCorteDetalhe:'',
+        p.estacaInadequada?'Sim':'Nao', p.distanciaInadequada?'Sim':'Nao',
+        p.fotos.length, p.obs, s.obsGeral, s.obsFotos.length
+      ].map(csvEsc).join(';'));
+    });
+  });
+  const stamp = new Date().toISOString().slice(0,16).replace(/[-T:]/g,'');
+  download(`monitoramento-coco_${stamp}.csv`, '\uFEFF'+rows.join('\n'), 'text/csv;charset=utf-8');
+}
+function exportCSV(){
+  const cacauList = state.setores.filter(s=>s.cultura!=='coco');
+  const cocoList = state.setores.filter(s=>s.cultura==='coco');
+  if(cacauList.length===0 && cocoList.length===0){ showToast('Nenhum setor cadastrado ainda'); return; }
+  if(cacauList.length){ exportCSVCacau(cacauList); exportCSVPragas(cacauList); }
+  if(cocoList.length) exportCSVCoco(cocoList);
+  showToast('Planilha(s) CSV exportada(s) (fotos não incluídas — use o backup JSON)');
+}
+function exportCSVPragas(lista){
+  const cols = ['Setor','Data','Responsavel','Valvula','Planta','Planta_Avaliada','Praga','Nivel','Estagio_Lagarta','Quantidade_Lagarta','Qtd_Fotos','Obs_Planta'];
+  const rows=[cols.join(';')];
+  lista.forEach(s=>{
+    s.valvulas.forEach(v=>{
+      (v.pragas||[]).forEach(p=>{
+        if(!p.tocado) return;
+        const ativas = state.pragasTipos.filter(pt=>p.presencas[pt.id] && p.presencas[pt.id].ativo);
+        if(ativas.length===0){
+          rows.push([s.nome, s.data, s.responsavel, v.label, p.numero, 'Sim', '(nenhuma)', '', '', '', p.fotos.length, p.obs].map(csvEsc).join(';'));
+        } else {
+          ativas.forEach(pt=>{
+            const pr = p.presencas[pt.id];
+            const isLagarta = pt.tipo==='lagarta';
+            rows.push([
+              s.nome, s.data, s.responsavel, v.label, p.numero, 'Sim', pt.nome,
+              isLagarta?'':(NIVEL_LABELS[pr.nivel]||pr.nivel),
+              isLagarta?ESTAGIO_LABELS[pr.estagio]:'',
+              isLagarta?pr.quantidade:'',
+              p.fotos.length, p.obs
+            ].map(csvEsc).join(';'));
+          });
+        }
+      });
+    });
+  });
+  const stamp = new Date().toISOString().slice(0,16).replace(/[-T:]/g,'');
+  download(`monitoramento-cacau-pragas_${stamp}.csv`, '\uFEFF'+rows.join('\n'), 'text/csv;charset=utf-8');
+}
+
+/* ---------------- GOOGLE SHEETS (Apps Script Web App) ---------------- */
+function buildRowsCacau(lista){
+  const rows=[];
+  lista.forEach(s=>{
+    s.valvulas.forEach(v=>{
+      v.pontos.forEach(p=>{
+        rows.push({
+          Setor:s.nome, Data:s.data, Responsavel:s.responsavel, Valvula:v.label,
+          Ponto:p.numero, Ponto_Avaliado:p.tocado?'Sim':'Nao',
+          Gotejos_Entupidos:p.gotejosEntupidos, Gotejos_Defeituosos:p.gotejosDefeituosos,
+          Mangueira_Cortada:p.corte?'Sim':'Nao', Tipo_Corte:p.corte?tipoLabel(CORTE_LABELS,p.corteTipo):'', Detalhe_Corte:p.corte&&p.corteTipo==='outros'?p.corteOutrosDetalhe:'', Qtd_Cortes:p.corte?p.qtdCortes:0,
+          Furo_Mangueira:p.furo?'Sim':'Nao', Tipo_Furo:p.furo?tipoLabel(FURO_LABELS,p.furoTipo):'', Detalhe_Furo:p.furo&&p.furoTipo==='outro'?p.furoOutroDetalhe:'', Qtd_Furos:p.furo?p.qtdFuros:0,
+          Qtd_Fotos_Ponto:p.fotos.length, Obs_Ponto:p.obs, Obs_Geral_Valvula:v.obsGeral, Qtd_Fotos_ObsGeral:v.obsFotos.length
+        });
+      });
+    });
+  });
+  return rows;
+}
+function buildValvulasCacau(lista){
+  const rows=[];
+  lista.forEach(s=>{
+    s.valvulas.forEach(v=>{
+      rows.push({
+        Setor:s.nome, Aferição_Dupla:s.medicaoDupla?'Sim':'Nao', Data:s.data, Responsavel:s.responsavel, Valvula:v.label,
+        Pressao_L1_Inicial:v.linha1.pressaoInicial, Vazao_L1_Inicial:v.linha1.vazaoInicial, Pressao_L1_Final:v.linha1.pressaoFinal, Vazao_L1_Final:v.linha1.vazaoFinal,
+        Pressao_L66_Inicial:v.linha66.pressaoInicial, Vazao_L66_Inicial:v.linha66.vazaoInicial, Pressao_L66_Final:v.linha66.pressaoFinal, Vazao_L66_Final:v.linha66.vazaoFinal
+      });
+    });
+  });
+  return rows;
+}
+function buildRowsCoco(lista){
+  const rows=[];
+  lista.forEach(s=>{
+    s.pontos.forEach(p=>{
+      rows.push({
+        Setor:s.nome, Data:s.data, Responsavel:s.responsavel,
+        Ponto:p.numero, Ponto_Avaliado:p.tocado?'Sim':'Nao',
+        Micro_Entupido:p.microEntupido?'Sim':'Nao', Causa_Entupimento:p.microEntupido?tipoLabel(ENTUP_LABELS,p.causaEntupimento):'', Detalhe_Entupimento:p.microEntupido&&p.causaEntupimento==='outros'?p.causaEntupimentoDetalhe:'',
+        Micro_Defeito:p.microDefeito?'Sim':'Nao', Tipo_Problema_Defeito:p.microDefeito?p.tipoProblemaDefeito:'',
+        Mangueira_Cortada:p.corte?'Sim':'Nao', Causa_Corte:p.corte?tipoLabel(CORTE_COCO_LABELS,p.causaCorte):'', Detalhe_Corte:p.corte&&p.causaCorte==='outras'?p.causaCorteDetalhe:'',
+        Estaca_Inadequada:p.estacaInadequada?'Sim':'Nao', Distancia_Inadequada:p.distanciaInadequada?'Sim':'Nao',
+        Qtd_Fotos_Ponto:p.fotos.length, Obs_Ponto:p.obs, Obs_Geral_Setor:s.obsGeral, Qtd_Fotos_ObsGeral:s.obsFotos.length
+      });
+    });
+  });
+  return rows;
+}
+function buildValvulasCoco(lista){
+  const rows=[];
+  lista.forEach(s=>{
+    s.valvulas.forEach(v=>{
+      rows.push({
+        Setor:s.nome, Segunda_Linha:s.segundaLinhaLabel, Data:s.data, Responsavel:s.responsavel, Valvula:v.label,
+        Pressao_L1_Inicio:v.linha1.pressaoInicio, Pressao_L1_Final:v.linha1.pressaoFinal,
+        Pressao_L2_Inicio:v.linha2.pressaoInicio, Pressao_L2_Final:v.linha2.pressaoFinal
+      });
+    });
+  });
+  return rows;
+}
+function buildRowsPragas(lista){
+  const rows=[];
+  lista.forEach(s=>{
+    s.valvulas.forEach(v=>{
+      (v.pragas||[]).forEach(p=>{
+        if(!p.tocado) return;
+        const ativas = state.pragasTipos.filter(pt=>p.presencas[pt.id] && p.presencas[pt.id].ativo);
+        if(ativas.length===0){
+          rows.push({ Setor:s.nome, Data:s.data, Responsavel:s.responsavel, Valvula:v.label, Planta:p.numero, Planta_Avaliada:'Sim', Praga:'(nenhuma)', Nivel:'', Estagio_Lagarta:'', Quantidade_Lagarta:'', Qtd_Fotos:p.fotos.length, Obs_Planta:p.obs });
+        } else {
+          ativas.forEach(pt=>{
+            const pr = p.presencas[pt.id];
+            const isLagarta = pt.tipo==='lagarta';
+            rows.push({
+              Setor:s.nome, Data:s.data, Responsavel:s.responsavel, Valvula:v.label, Planta:p.numero, Planta_Avaliada:'Sim', Praga:pt.nome,
+              Nivel: isLagarta?'':(NIVEL_LABELS[pr.nivel]||pr.nivel),
+              Estagio_Lagarta: isLagarta?ESTAGIO_LABELS[pr.estagio]:'',
+              Quantidade_Lagarta: isLagarta?pr.quantidade:'',
+              Qtd_Fotos:p.fotos.length, Obs_Planta:p.obs
+            });
+          });
+        }
+      });
+    });
+  });
+  return rows;
+}
+async function sendToSheets(){
+  if(!state.webAppUrl){ showToast('Configure a URL do Google Sheets primeiro'); return; }
+  const cacauList = state.setores.filter(s=>s.cultura!=='coco');
+  const cocoList = state.setores.filter(s=>s.cultura==='coco');
+  if(cacauList.length===0 && cocoList.length===0){ showToast('Nenhum setor cadastrado ainda'); return; }
+  const payload = {
+    cacauPontos: buildRowsCacau(cacauList),
+    cacauValvulas: buildValvulasCacau(cacauList),
+    cacauPragas: buildRowsPragas(cacauList),
+    cocoPontos: buildRowsCoco(cocoList),
+    cocoValvulas: buildValvulasCoco(cocoList)
+  };
+  showToast('Enviando para o Google Sheets…');
+  try{
+    const res = await fetch(state.webAppUrl, {
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify(payload)
+    });
+    const text = await res.text();
+    let json = null;
+    try{ json = JSON.parse(text); }catch(e){}
+    if(json && json.ok){
+      showToast('Dados enviados ao Google Sheets!');
+    } else if(json && json.ok===false){
+      alert('O Google Apps Script recebeu os dados, mas retornou um erro:\n\n'+json.error);
+    } else {
+      alert('O envio chegou ao Google, mas a resposta não foi o JSON esperado (status HTTP '+res.status+').\n\n'
+        +'As causas mais comuns são:\n'
+        +'• A implantação do Web App não está com "Quem pode acessar: Qualquer pessoa"\n'
+        +'• Você editou o Code.gs depois do deploy e não criou uma "Nova versão" em Gerenciar implantações\n\n'
+        +'Início da resposta recebida:\n'+text.slice(0,300));
+    }
+  }catch(err){
+    alert('Falha de rede ao tentar enviar: '+err.message+'\n\nConfira sua conexão com a internet e se a URL colada termina em "/exec".');
+  }
+}
+function configurarWebAppUrl(){
+  const url = prompt('Cole aqui a URL do Web App do Google Apps Script (termina em /exec):', state.webAppUrl||'');
+  if(url!==null){
+    state.webAppUrl = url.trim();
+    showToast(state.webAppUrl ? 'URL salva (inclua no backup JSON para não perder)' : 'URL removida');
+  }
+}
+async function testarWebAppUrl(){
+  if(!state.webAppUrl){ showToast('Configure a URL do Google Sheets primeiro'); return; }
+  showToast('Testando link…');
+  try{
+    const res = await fetch(state.webAppUrl, { method:'GET' });
+    const text = await res.text();
+    let json = null;
+    try{ json = JSON.parse(text); }catch(e){}
+    if(json && json.ok){
+      alert('Conexão OK! O Web App respondeu corretamente:\n\n'+text);
+    } else {
+      alert('O link respondeu (status HTTP '+res.status+'), mas não é o JSON esperado.\n\n'
+        +'Se o texto abaixo parecer uma página de login do Google, mude a implantação para\n'
+        +'"Quem pode acessar: Qualquer pessoa" (não "Qualquer pessoa com Conta Google").\n\n'
+        +'Início da resposta:\n'+text.slice(0,300));
+    }
+  }catch(err){
+    alert('Não foi possível nem conectar (erro: '+err.message+').\n\n'
+      +'Passos para checar:\n'
+      +'1) Abra a URL colada direto numa aba nova do navegador — ela deve mostrar um texto\n'
+      +'   JSON tipo {"ok":true,...}, sem pedir login.\n'
+      +'2) Se pedir login do Google, volte no Apps Script → Gerenciar implantações → edite a\n'
+      +'   implantação → "Quem pode acessar" deve estar como "Qualquer pessoa".\n'
+      +'3) Se você editou o Code.gs depois de implantar, é preciso criar uma "Nova versão"\n'
+      +'   na implantação — só salvar o script não atualiza a URL publicada.');
+  }
+}
+function importJSON(file){
+  const reader = new FileReader();
+  reader.onload = e=>{
+    try{
+      const data = JSON.parse(e.target.result);
+      if(!data.setores || !Array.isArray(data.setores)) throw new Error('formato inválido');
+      data.setores.forEach(s=>{ s.id = uid(); });
+      migrarSetoresPragas(data.setores);
+      state.setores = state.setores.concat(data.setores);
+      if(data.webAppUrl) state.webAppUrl = data.webAppUrl;
+      if(data.pragasTipos && Array.isArray(data.pragasTipos)) state.pragasTipos = data.pragasTipos;
+      showToast(`${data.setores.length} setor(es) importado(s)`);
+      state.view='home'; render();
+    }catch(err){
+      showToast('Arquivo inválido');
+    }
+  };
+  reader.readAsText(file);
+}
+document.getElementById('fileInput').addEventListener('change', e=>{
+  if(e.target.files[0]) importJSON(e.target.files[0]);
+  e.target.value='';
+});
+
+/* ---------------- RENDER: HEADER ---------------- */
+function renderHeader(){
+  const row = document.getElementById('headerRow');
+  const sub = document.getElementById('headerSub');
+  if(state.view==='home'){
+    row.innerHTML = `
+      <div><h1>🌱 Irrigação &amp; Pragas</h1></div>
+      <button class="icon-btn" id="btnMenu">⇅ Dados</button>`;
+    sub.textContent = `Escolha um monitoramento — uso offline · v${APP_VERSION}`;
+    document.getElementById('btnMenu').onclick = ()=>openMenu();
+  } else if(state.view==='modulo-list'){
+    const m = getModulo(state.modulo) || MODULOS[0];
+    row.innerHTML = `<button class="back-link" id="btnBack">← Início</button>`;
+    sub.innerHTML = `<strong style="color:#fff;font-family:var(--font-body);font-size:0.95rem;">${m.emoji} ${m.titulo} — ${m.sub}</strong>`;
+    document.getElementById('btnBack').onclick = ()=>{ state.view='home'; render(); };
+  } else if(state.view==='historico'){
+    row.innerHTML = `<button class="back-link" id="btnBack">← Voltar</button>`;
+    sub.innerHTML = `<strong style="color:#fff;font-family:var(--font-body);font-size:0.95rem;">📊 Histórico</strong>`;
+    document.getElementById('btnBack').onclick = ()=>{ state.view='modulo-list'; render(); };
+  } else {
+    const setor = getSetor(state.setorId);
+    const m = getModulo(state.modulo) || MODULOS[0];
+    row.innerHTML = `<button class="back-link" id="btnBack">← ${m.titulo.replace('Monitoramento de ','')}</button>`;
+    sub.innerHTML = `<strong style="color:#fff;font-family:var(--font-body);font-size:0.95rem;">${m.emoji} ${setor.nome || 'Novo setor'}</strong>`;
+    document.getElementById('btnBack').onclick = ()=>{ state.view='modulo-list'; render(); };
+  }
+}
+function openMenu(){
+  const choice = confirm('Exportar backup em JSON agora? (inclui fotos)\n\nOK = Exportar JSON\nCancelar = ver outras opções');
+  if(choice){ exportJSON(); return; }
+  const choice2 = confirm('Exportar planilha CSV (para Excel)?\n\nOK = Exportar CSV\nCancelar = Importar arquivo JSON');
+  if(choice2){ exportCSV(); return; }
+  document.getElementById('fileInput').click();
+}
+
+/* ---------------- RENDER: HOME (HUB DE MÓDULOS) ---------------- */
+function renderHome(){
+  const app = document.getElementById('app');
+  const html = `
+    <div class="modulo-grid">
+      ${MODULOS.map(m=>`
+      <div class="modulo-tile" data-mod="${m.id}" style="background:${m.cor};">
+        <div class="modulo-emoji">${m.emoji}<span class="modulo-canto">${m.canto}</span></div>
+        <div class="modulo-titulo">${m.titulo}</div>
+        <div class="modulo-sub">${m.sub}</div>
+      </div>`).join('')}
+    </div>
+    <div class="toolbar" style="margin-top:6px;">
+      <button class="btn-ghost" id="btnExpJSON">💾 Salvar backup (.json)</button>
+      <button class="btn-ghost" id="btnExpCSV">📊 Exportar planilha (.csv)</button>
+      <button class="btn-ghost" id="btnImp">📥 Importar backup</button>
+      <button class="btn-ghost" id="btnConfigSheets">🔗 Configurar Google Sheets</button>
+      <button class="btn-ghost" id="btnTestarSheets">🧪 Testar link do Sheets</button>
+      <button class="btn-ghost" id="btnEnviarSheets" style="border-color:var(--forest);color:var(--forest);">☁️ Enviar para Google Sheets</button>
+    </div>
+  `;
+  app.innerHTML = html;
+  app.querySelectorAll('.modulo-tile').forEach(t=>{
+    t.onclick = ()=>{ state.modulo = t.dataset.mod; state.view='modulo-list'; render(); };
+  });
+  document.getElementById('btnExpJSON').onclick = exportJSON;
+  document.getElementById('btnExpCSV').onclick = exportCSV;
+  document.getElementById('btnImp').onclick = ()=>document.getElementById('fileInput').click();
+  document.getElementById('btnConfigSheets').onclick = configurarWebAppUrl;
+  document.getElementById('btnTestarSheets').onclick = testarWebAppUrl;
+  document.getElementById('btnEnviarSheets').onclick = sendToSheets;
+}
+
+function resumoSetorModulo(setor, tipo){
+  return tipo==='pragas' ? resumoPragasSetor(setor) : resumoSetor(setor);
+}
+
+/* ---------------- RENDER: LISTA DE SETORES DE UM MÓDULO ---------------- */
+function renderModuloList(){
+  const m = getModulo(state.modulo) || MODULOS[0];
+  const app = document.getElementById('app');
+  const lista = state.setores.filter(s=>s.cultura===m.cultura);
+
+  let totAval=0, totProb=0;
+  lista.forEach(s=>{ const r = resumoSetorModulo(s, m.tipo); totAval+=r.avaliados; totProb+=r.problemas; });
+
+  let html = `
+    <div class="stat-row">
+      <div class="stat"><div class="num">${lista.length}</div><div class="lbl">Setores</div></div>
+      <div class="stat"><div class="num">${totAval}</div><div class="lbl">${m.tipo==='pragas'?'Plantas avaliadas':'Pontos avaliados'}</div></div>
+      <div class="stat"><div class="num" style="color:${totProb>0?'var(--danger)':'var(--ok)'}">${totProb}</div><div class="lbl">Com ocorrência</div></div>
+    </div>
+    <button class="btn-primary" id="btnNovoSetorMod" style="background:${m.cor};">${m.canto} + Novo setor de ${m.sub}</button>
+    <div class="toolbar" style="margin-top:14px;">
+      <button class="btn-ghost" id="btnPadraoMod">${m.canto} Carregar setores padrão (${m.sub})</button>
+    </div>
+  `;
+  if(lista.length===0){
+    html += `<div class="empty-state"><div class="pod">${m.canto}</div>Nenhum setor de ${m.sub} cadastrado ainda.<br>Toque em "Carregar setores padrão" ou crie um setor manualmente.</div>`;
+  } else {
+    [...lista].reverse().forEach(s=>{
+      const r = resumoSetorModulo(s, m.tipo);
+      let badge = r.avaliados===0 ? `<span class="badge pending">Não iniciado</span>`
+        : r.problemas>0 ? `<span class="badge danger">${r.problemas} problema(s)</span>`
+        : `<span class="badge ok">Sem problemas</span>`;
+      const duplaBadge = (m.tipo==='irrigacao' && s.medicaoDupla) ? `<span class="badge dupla">Aferição dupla</span>` : '';
+      html += `
+        <div class="setor-row" data-id="${s.id}">
+          <div class="info">
+            <h3>${s.nome || '(sem nome)'}</h3>
+            <div class="meta">${s.data} · ${r.avaliados}/${r.total} ${m.tipo==='pragas'?'plantas':'pontos'} aferidos</div>
+            <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">${badge}${duplaBadge}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <button class="btn-secondary btn-open">Abrir</button>
+            <button class="btn-ghost btn-hist" style="font-size:0.7rem;padding:6px 10px;">📊 Histórico</button>
+            <button class="btn-danger-outline btn-del">Excluir</button>
+          </div>
+        </div>`;
+    });
+  }
+  app.innerHTML = html;
+
+  document.getElementById('btnNovoSetorMod').onclick = ()=>{
+    const s = m.cultura==='coco' ? novoSetorCoco() : novoSetor();
+    state.setores.push(s);
+    state.setorId = s.id; state.valvIdx=0; state.view='setor';
+    render();
+  };
+  document.getElementById('btnPadraoMod').onclick = ()=>{
+    const existentes = new Set(state.setores.map(s=>s.nome));
+    const gerador = m.cultura==='coco' ? gerarSetoresPadraoCoco : gerarSetoresPadrao;
+    const novos = gerador().filter(s=>!existentes.has(s.nome));
+    if(novos.length===0){ showToast(`Os setores padrão de ${m.sub} já estão cadastrados`); return; }
+    state.setores = state.setores.concat(novos);
+    showToast(`${novos.length} setor(es) de ${m.sub} adicionados`);
+    render();
+  };
+  app.querySelectorAll('.setor-row').forEach(row=>{
+    const id = row.dataset.id;
+    row.querySelector('.btn-open').onclick = ()=>{ state.setorId=id; state.valvIdx=0; state.view='setor'; render(); };
+    row.querySelector('.btn-hist').onclick = ()=>{ state.historicoSetorId=id; state.historicoTipo=m.tipo; state.view='historico'; render(); };
+    row.querySelector('.btn-del').onclick = ()=>{
+      if(confirm('Excluir este setor e todos os dados aferidos nele?')){
+        state.setores = state.setores.filter(s=>s.id!==id);
+        render();
+      }
+    };
+  });
+}
+
+/* ---------------- RENDER: HISTÓRICO (GRÁFICOS) ---------------- */
+function barChartSVG(entries, opts){
+  opts = opts||{};
+  const w = 640, h = 190, padL = 30, padB = 34, padT = 14, padR = 10;
+  const innerW = w-padL-padR, innerH = h-padT-padB;
+  const maxVal = Math.max(1, ...entries.map(e=>e.value), opts.maxTotal||0);
+  const n = entries.length || 1;
+  const bw = innerW/n;
+  const color = opts.color || '#A6362B';
+  let bars = '', labels = '';
+  entries.forEach((e,i)=>{
+    const bh = (e.value/maxVal)*innerH;
+    const x = padL + i*bw + bw*0.18;
+    const bwReal = bw*0.64;
+    const y = padT + (innerH-bh);
+    bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bwReal.toFixed(1)}" height="${bh.toFixed(1)}" rx="3" fill="${color}"></rect>`;
+    bars += `<text x="${(x+bwReal/2).toFixed(1)}" y="${(y-4).toFixed(1)}" font-size="11" text-anchor="middle" fill="#1E2A1B" font-family="ui-monospace,monospace">${e.value}</text>`;
+    labels += `<text x="${(x+bwReal/2).toFixed(1)}" y="${(h-padB+16).toFixed(1)}" font-size="9.5" text-anchor="middle" fill="#5A6653">${escHTML((e.label||'').slice(5))}</text>`;
+  });
+  const axisY = padT+innerH;
+  return `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;">
+    <line x1="${padL}" y1="${axisY}" x2="${w-padR}" y2="${axisY}" stroke="#DAD4C2" stroke-width="1.5"></line>
+    ${bars}${labels}
+  </svg>`;
+}
+function renderHistorico(){
+  const setor = getSetor(state.historicoSetorId);
+  const tipo = state.historicoTipo || 'irrigacao';
+  const app = document.getElementById('app');
+  if(!setor){ app.innerHTML = `<div class="empty-state">Setor não encontrado.</div>`; return; }
+  const hist = (setor.historico||[]).filter(hh=>hh.modulo===tipo).sort((a,b)=>a.data<b.data?-1:1);
+
+  let html = `<div class="card"><h3>${escHTML(setor.nome)}</h3>
+    <div style="font-size:0.75rem;color:var(--ink-soft);margin-top:4px;">${tipo==='pragas'?'Monitoramento de pragas':'Monitoramento de irrigação'} · ${hist.length} registro(s) salvo(s)</div>
+  </div>`;
+
+  if(hist.length===0){
+    html += `<div class="empty-state">Nenhum histórico salvo ainda para este setor.<br>Os dados aparecem aqui depois que você tocar em "Salvar e voltar" pelo menos uma vez.</div>`;
+  } else {
+    const total = hist[hist.length-1].total;
+    html += `
+    <div class="section-title">${tipo==='pragas'?'Plantas com ocorrência por data':'Pontos com ocorrência por data'}<div class="rule"></div></div>
+    <div class="card">${barChartSVG(hist.map(hh=>({label:hh.data, value:hh.problemas})), {color:'#A6362B', maxTotal: total})}</div>
+    <div class="section-title">${tipo==='pragas'?'Plantas avaliadas por data':'Pontos avaliados por data'}<div class="rule"></div></div>
+    <div class="card">${barChartSVG(hist.map(hh=>({label:hh.data, value:hh.avaliados})), {color:'#3E7C42', maxTotal: total})}</div>
+    <div class="section-title">Registros<div class="rule"></div></div>
+    <div class="card">
+      ${hist.slice().reverse().map(hh=>`
+        <div class="row-item">
+          <div class="lbl">${hh.data}<span class="sub">${hh.avaliados}/${hh.total} avaliados</span></div>
+          <div style="font-weight:800;color:${hh.problemas>0?'var(--danger)':'var(--ok)'};font-family:var(--font-mono);">${hh.problemas}</div>
+        </div>`).join('')}
+    </div>`;
+  }
+  app.innerHTML = html;
+}
+
+/* ---------------- RENDER: SETOR / VÁLVULA ---------------- */
+function renderSetor(){
+  const setor = getSetor(state.setorId);
+  const app = document.getElementById('app');
+  const v = setor.valvulas[state.valvIdx];
+  const r = resumoSetor(setor);
+  const dupla = !!setor.medicaoDupla;
+  const modulo = getModulo(state.modulo) || MODULOS[0];
+  const aba = modulo.tipo;
+
+  let html = `
+    <div class="card">
+      <div class="field-row">
+        <label>Identificação do setor</label>
+        <input type="text" id="fNome" placeholder="Ex.: TA1" value="${escAttr(setor.nome)}">
+      </div>
+      <div class="grid-2">
+        <div class="field-row">
+          <label>Data da aferição</label>
+          <input type="date" id="fData" value="${setor.data}">
+        </div>
+        <div class="field-row">
+          <label>Responsável</label>
+          <input type="text" id="fResp" placeholder="Nome" value="${escAttr(setor.responsavel)}">
+        </div>
+      </div>
+      ${aba==='irrigacao' ? `
+      <div class="row-item" style="border-top:1px solid var(--line);">
+        <div class="lbl">Aferição dupla de pressão/vazão<span class="sub">registra leitura inicial e final na linha 1 e na linha 66</span></div>
+        <div class="switch ${dupla?'on':''}" id="swDupla"><div class="knob"></div></div>
+      </div>
+      <div style="font-size:0.75rem;color:var(--ink-soft);margin-top:10px;">${r.avaliados}/${r.total} pontos de irrigação aferidos no setor · ${r.problemas} com ocorrência</div>
+      ` : ''}
+    </div>
+
+    <div class="tabs">
+      ${setor.valvulas.map((vv,i)=>`<div class="tab ${i===state.valvIdx?'active':''}" data-idx="${i}">${escHTML(vv.label)}</div>`).join('')}
+    </div>
+
+    <div class="valve-label-row" style="margin:0 0 14px;">
+      <span style="font-size:0.7rem;color:var(--ink-soft);font-weight:700;">VÁLVULA</span>
+      <input type="text" id="fValvLabel" value="${escAttr(v.label)}">
+    </div>
+
+    ${aba==='pragas' ? renderAbaPragasHTML(v) : renderAbaIrrigacaoHTML(v, dupla)}
+
+    <div class="footer-actions">
+      <button class="btn-primary" id="btnSalvarVoltar">Salvar e voltar aos setores</button>
+    </div>
+  `;
+  app.innerHTML = html;
+
+  document.getElementById('fNome').addEventListener('input', e=>{ setor.nome=e.target.value; });
+  document.getElementById('fData').addEventListener('input', e=>{ setor.data=e.target.value; });
+  document.getElementById('fResp').addEventListener('input', e=>{ setor.responsavel=e.target.value; });
+  const swDupla = document.getElementById('swDupla');
+  if(swDupla) swDupla.onclick = ()=>{ setor.medicaoDupla = !setor.medicaoDupla; render(); };
+  document.getElementById('fValvLabel').addEventListener('input', e=>{ v.label=e.target.value; });
+
+  app.querySelectorAll('.tab').forEach(t=>{
+    t.onclick = ()=>{ state.valvIdx = parseInt(t.dataset.idx,10); render(); };
+  });
+
+  if(aba==='pragas'){
+    wirePragasManager();
+    wirePontoEventsPraga(v);
+  } else {
+    app.querySelectorAll('.line-end input').forEach(inp=>{
+      inp.addEventListener('input', e=>{
+        const parts = inp.dataset.path.split('|');
+        if(parts.length===2){ v[parts[0]][parts[1]] = e.target.value; }
+        else { v[parts[0]][parts[1]][parts[2]] = e.target.value; }
+        if(inp.dataset.vfield){ atualizarVazaoCalc(inp); }
+      });
+    });
+    document.getElementById('fObsGeral').addEventListener('input', e=>{ v.obsGeral = e.target.value; });
+    wirePhotoSection(document.getElementById('obsGeralCard'), v.obsFotos, ()=>render());
+    wirePontoEvents(v);
+  }
+
+  document.getElementById('btnSalvarVoltar').onclick = ()=>{
+    if(!setor.nome.trim()){
+      if(!confirm('Este setor está sem nome/identificação. Salvar mesmo assim?')) return;
+    }
+    registrarHistorico(setor, aba);
+    showToast('Dados salvos');
+    state.view='modulo-list'; render();
+  };
+}
+function atualizarVazaoCalc(inp){
+  const bloco = inp.closest('.vazao-block');
+  if(!bloco) return;
+  const mlInp = bloco.querySelector('[data-vfield="volumeMl"]');
+  const minInp = bloco.querySelector('[data-vfield="minutos"]');
+  const c = calcVazao({volumeMl:mlInp.value, minutos:minInp.value});
+  const calcEl = bloco.querySelector('.vazao-calc');
+  calcEl.textContent = c.litros>0
+    ? ('≈ '+c.litros.toFixed(3)+' L'+(c.lh!==null?(' · '+c.lh.toFixed(2)+' L/h'):' (preencha os minutos p/ calcular L/h)'))
+    : '';
+}
+
+function renderAbaIrrigacaoHTML(v, dupla){
+  return `
+    <div class="section-title">Pressão e vazão<div class="rule"></div></div>
+    <div class="dripline">
+      <div class="ends">
+        ${linhaBlockHTML('linha1', 'Linha 1 (início)', v.linha1, dupla)}
+        ${linhaBlockHTML('linha66', 'Linha 66 (final)', v.linha66, dupla)}
+      </div>
+      <div class="line-track">
+        <div class="dots">
+          ${v.pontos.map(p=>`<div class="dot ${pontoStatus(p)==='pending'?'':pontoStatus(p)}" title="Ponto ${p.numero}"></div>`).join('')}
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">10 pontos aleatórios (1,6 m de mangueira cada)<div class="rule"></div></div>
+    <div id="pontosWrap">
+      ${v.pontos.map(p=>pontoCardHTML(p)).join('')}
+    </div>
+
+    <div class="section-title">Observações gerais da válvula<div class="rule"></div></div>
+    <div class="card" id="obsGeralCard">
+      <div class="field-row" style="margin-bottom:0;">
+        <label>Outras ocorrências visualizadas (fora dos pontos avaliados)</label>
+        <textarea id="fObsGeral" placeholder="Ex.: praga observada, vazamento no registro, mangueira secundária solta, etc.">${escHTML(v.obsGeral)}</textarea>
+      </div>
+      ${photoSectionHTML(v.obsFotos, 'obsGeral')}
+    </div>
+  `;
+}
+
+function renderAbaPragasHTML(v){
+  const r = resumoPragasValvula(v);
+  return `
+    <div class="section-title">Monitoramento de pragas — 20 plantas<div class="rule"></div></div>
+    <div style="font-size:0.75rem;color:var(--ink-soft);margin:-4px 0 12px;">${r.avaliadas}/${r.total} plantas avaliadas nesta válvula · ${r.comOcorrencia} com ocorrência</div>
+    <button type="button" class="btn-ghost" id="btnTogglePragasManager" style="margin-bottom:12px;">⚙️ Gerenciar tipos de praga (${state.pragasTipos.length})</button>
+    ${state.showPragasManager ? pragasManagerHTML() : ''}
+    <div id="pontosWrapPraga">
+      ${v.pragas.map(p=>pontoCardHTMLPraga(p)).join('')}
+    </div>
+  `;
+}
+function pragasManagerHTML(){
+  return `
+  <div class="card" id="pragasManagerCard">
+    <label style="font-size:0.72rem;font-weight:700;color:var(--ink-soft);text-transform:uppercase;display:block;margin-bottom:8px;">Tipos de praga/doença monitorados</label>
+    <div id="pragasListWrap">
+      ${state.pragasTipos.map(pt=>`
+      <div class="row-item" data-pid="${pt.id}">
+        <input type="text" class="tipo-detalhe" style="margin:0;flex:1;" data-role="praga-nome" value="${escAttr(pt.nome)}">
+        <select class="nivel-select" data-role="praga-tipocampo" style="flex-shrink:0;">
+          <option value="padrao" ${pt.tipo!=='lagarta'?'selected':''}>Padrão</option>
+          <option value="lagarta" ${pt.tipo==='lagarta'?'selected':''}>Lagarta (estágio+qtd)</option>
+        </select>
+        <button type="button" class="btn-danger-outline" data-role="praga-rm" style="padding:5px 10px;font-size:0.7rem;flex-shrink:0;">Remover</button>
+      </div>`).join('') || '<div style="font-size:0.8rem;color:var(--ink-soft);">Nenhum tipo cadastrado ainda.</div>'}
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+      <input type="text" id="novaPragaInput" placeholder="Nova praga/doença..." style="flex:1;min-width:140px;border:1.5px solid var(--line);border-radius:8px;padding:8px 10px;font-size:0.85rem;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--ink-soft);font-weight:600;">
+        <input type="checkbox" id="novaPragaLagarta" style="width:16px;height:16px;"> é lagarta (estágio+qtd)
+      </label>
+      <button type="button" class="btn-secondary" id="btnAddPraga">+ Adicionar</button>
+    </div>
+  </div>`;
+}
+function pontoCardHTMLPraga(p){
+  const status = pontoStatusPraga(p);
+  const linhas = state.pragasTipos.map(pt=>{
+    const isLagarta = pt.tipo==='lagarta';
+    const pr = p.presencas[pt.id] || (isLagarta ? {ativo:false, estagio:0, quantidade:1} : {ativo:false, nivel:'baixa'});
+    const campos = !pr.ativo ? '' : isLagarta
+      ? `<select class="nivel-select" data-role="estagio" data-pid="${pt.id}">
+          ${[0,1,2,3,4,5].map(n=>`<option value="${n}" ${pr.estagio===n?'selected':''}>${n===0?'0 - Neonata':n===5?'5 - Adulta':n}</option>`).join('')}
+        </select>
+        <input type="number" class="qty-input" min="1" data-role="qtd-lagarta" data-pid="${pt.id}" value="${escAttr(pr.quantidade)}" title="Quantidade encontrada">`
+      : `<select class="nivel-select" data-role="nivel" data-pid="${pt.id}">
+          <option value="baixa" ${pr.nivel==='baixa'?'selected':''}>Baixa</option>
+          <option value="media" ${pr.nivel==='media'?'selected':''}>Média</option>
+          <option value="alta" ${pr.nivel==='alta'?'selected':''}>Alta</option>
+        </select>`;
+    return `
+    <div class="row-item">
+      <div class="lbl">${escHTML(pt.nome)}${isLagarta&&pr.ativo?'<span class="sub">Estágio 0=neonata … 5=adulta</span>':''}</div>
+      <div class="chk-qty">
+        ${campos}
+        <div class="switch ${pr.ativo?'danger-on':''}" data-role="sw-praga" data-pid="${pt.id}"><div class="knob"></div></div>
+      </div>
+    </div>`;
+  }).join('');
+  return `
+  <div class="ponto-card ${p.tocado?'touched':''} ${status!=='pending'?status:''}" data-n="${p.numero}">
+    <div class="ponto-head">
+      <div class="n">Planta ${p.numero}</div>
+      <div class="status">${status==='pending'?'Pendente':status==='ok'?'Sem ocorrência':'Com ocorrência'}</div>
+    </div>
+    ${linhas || '<div style="font-size:0.8rem;color:var(--ink-soft);">Nenhum tipo de praga cadastrado — toque em "Gerenciar tipos de praga" acima.</div>'}
+    <button type="button" class="obs-toggle" data-role="obs-toggle">${p.obs? '✎ editar observação' : '+ observação (opcional)'}</button>
+    <div class="ponto-obs" data-role="obs-wrap" style="display:${p.obs?'block':'none'}">
+      <textarea data-role="obs-text" placeholder="Detalhe o que foi observado nesta planta...">${escHTML(p.obs)}</textarea>
+    </div>
+    ${photoSectionHTML(p.fotos, 'ponto')}
+  </div>`;
+}
+function refreshPontoCardPraga(v, p){
+  const wrap = document.querySelector(`#pontosWrapPraga .ponto-card[data-n="${p.numero}"]`);
+  if(!wrap) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = pontoCardHTMLPraga(p);
+  wrap.replaceWith(tmp.firstElementChild);
+  wirePontoEventsPraga(v, p.numero);
+}
+function wirePontoEventsPraga(v, onlyN){
+  const cards = onlyN
+    ? [document.querySelector(`#pontosWrapPraga .ponto-card[data-n="${onlyN}"]`)]
+    : [...document.querySelectorAll('#pontosWrapPraga .ponto-card')];
+
+  cards.forEach(card=>{
+    if(!card) return;
+    const n = parseInt(card.dataset.n,10);
+    const p = v.pragas.find(pt=>pt.numero===n);
+
+    card.querySelectorAll('[data-role="sw-praga"]').forEach(sw=>{
+      sw.onclick = ()=>{
+        const pid = sw.dataset.pid;
+        const tipoInfo = state.pragasTipos.find(x=>x.id===pid);
+        const isLagarta = tipoInfo && tipoInfo.tipo==='lagarta';
+        const cur = p.presencas[pid] || (isLagarta ? {ativo:false, estagio:0, quantidade:1} : {ativo:false, nivel:'baixa'});
+        p.presencas[pid] = isLagarta
+          ? { ativo: !cur.ativo, estagio: cur.estagio||0, quantidade: cur.quantidade||1 }
+          : { ativo: !cur.ativo, nivel: cur.nivel||'baixa' };
+        p.tocado = true;
+        refreshPontoCardPraga(v,p);
+      };
+    });
+    card.querySelectorAll('[data-role="nivel"]').forEach(sel=>{
+      sel.addEventListener('change', e=>{
+        const pid = sel.dataset.pid;
+        const cur = p.presencas[pid] || {ativo:true, nivel:'baixa'};
+        cur.nivel = e.target.value;
+        p.presencas[pid] = cur;
+      });
+    });
+    card.querySelectorAll('[data-role="estagio"]').forEach(sel=>{
+      sel.addEventListener('change', e=>{
+        const pid = sel.dataset.pid;
+        const cur = p.presencas[pid] || {ativo:true, estagio:0, quantidade:1};
+        cur.estagio = parseInt(e.target.value,10);
+        p.presencas[pid] = cur;
+      });
+    });
+    card.querySelectorAll('[data-role="qtd-lagarta"]').forEach(inp=>{
+      inp.addEventListener('input', e=>{
+        const pid = inp.dataset.pid;
+        const cur = p.presencas[pid] || {ativo:true, estagio:0, quantidade:1};
+        cur.quantidade = parseInt(e.target.value,10)||1;
+        p.presencas[pid] = cur;
+      });
+    });
+
+    card.querySelector('[data-role="obs-toggle"]').onclick = ()=>{
+      const w = card.querySelector('[data-role="obs-wrap"]');
+      w.style.display = w.style.display==='none' ? 'block' : 'none';
+      if(w.style.display==='block') card.querySelector('[data-role="obs-text"]').focus();
+    };
+    card.querySelector('[data-role="obs-text"]').addEventListener('input', e=>{
+      p.obs = e.target.value; p.tocado = p.tocado || e.target.value.trim().length>0;
+    });
+
+    wirePhotoSection(card, p.fotos, ()=>{ p.tocado=true; refreshPontoCardPraga(v,p); });
+  });
+}
+function wirePragasManager(){
+  const btn = document.getElementById('btnTogglePragasManager');
+  if(btn) btn.onclick = ()=>{ state.showPragasManager = !state.showPragasManager; render(); };
+  const mgr = document.getElementById('pragasManagerCard');
+  if(!mgr) return;
+  mgr.querySelectorAll('[data-role="praga-nome"]').forEach(inp=>{
+    const pid = inp.closest('[data-pid]').dataset.pid;
+    inp.addEventListener('input', e=>{
+      const pt = state.pragasTipos.find(x=>x.id===pid);
+      if(pt) pt.nome = e.target.value;
+    });
+  });
+  mgr.querySelectorAll('[data-role="praga-tipocampo"]').forEach(sel=>{
+    const pid = sel.closest('[data-pid]').dataset.pid;
+    sel.addEventListener('change', e=>{
+      const pt = state.pragasTipos.find(x=>x.id===pid);
+      if(pt) pt.tipo = e.target.value;
+    });
+  });
+  mgr.querySelectorAll('[data-role="praga-rm"]').forEach(btnRm=>{
+    btnRm.onclick = ()=>{
+      const pid = btnRm.closest('[data-pid]').dataset.pid;
+      if(confirm('Remover este tipo de praga da lista? (os registros já feitos com ele ficam guardados, só param de aparecer)')){
+        state.pragasTipos = state.pragasTipos.filter(x=>x.id!==pid);
+        render();
+      }
+    };
+  });
+  const addBtn = document.getElementById('btnAddPraga');
+  if(addBtn) addBtn.onclick = ()=>{
+    const input = document.getElementById('novaPragaInput');
+    const nome = input.value.trim();
+    if(!nome) return;
+    const ehLagarta = document.getElementById('novaPragaLagarta').checked;
+    state.pragasTipos.push({ id: uid(), nome, tipo: ehLagarta?'lagarta':'padrao' });
+    render();
+    state.showPragasManager = true;
+  };
+}
+
+function calcVazao(vz){
+  const ml = parseFloat(vz.volumeMl)||0;
+  const min = parseFloat(vz.minutos)||0;
+  const litros = ml>0 ? ml/1000 : 0;
+  const lh = (ml>0 && min>0) ? (litros/(min/60)) : null;
+  return {litros, lh};
+}
+function vazaoBlockHTML(grp, campo, rotulo, vz){
+  const c = calcVazao(vz);
+  const calcTxt = c.litros>0
+    ? ('≈ '+c.litros.toFixed(3)+' L'+(c.lh!==null?(' · '+c.lh.toFixed(2)+' L/h'):' (preencha os minutos p/ calcular L/h)'))
+    : '';
+  return `
+  <div class="vazao-block">
+    <div class="rowlbl" style="margin-bottom:4px;">Vazão${rotulo?(' — '+rotulo):''}</div>
+    <div class="pf-pair">
+      <div class="pf-col"><div class="rowlbl">Coletado (mL)</div>
+        <input type="number" inputmode="decimal" step="1" min="0" data-path="${grp}|${campo}|volumeMl" data-vfield="volumeMl" value="${escAttr(vz.volumeMl)}"></div>
+      <div class="pf-col"><div class="rowlbl">Tempo (min)</div>
+        <input type="number" inputmode="decimal" step="0.1" min="0" data-path="${grp}|${campo}|minutos" data-vfield="minutos" value="${escAttr(vz.minutos)}"></div>
+    </div>
+    <div class="vazao-calc">${calcTxt}</div>
+  </div>`;
+}
+function linhaBlockHTML(grp, titulo, linha, dupla){
+  if(!dupla){
+    return `
+    <div class="line-end">
+      <div class="pos">${titulo}</div>
+      <div class="pf-pair">
+        <div class="pf-col"><div class="rowlbl">Pressão (mca/bar)</div>
+          <input type="number" inputmode="decimal" step="0.1" data-path="${grp}|pressaoInicial" value="${escAttr(linha.pressaoInicial)}"></div>
+        <div class="pf-col"></div>
+      </div>
+      ${vazaoBlockHTML(grp, 'vazaoInicial', '', linha.vazaoInicial)}
+    </div>`;
+  }
+  return `
+  <div class="line-end">
+    <div class="pos">${titulo}</div>
+    <div class="pf-pair">
+      <div class="pf-col"><div class="rowlbl">Pressão inicial</div>
+        <input type="number" inputmode="decimal" step="0.1" data-path="${grp}|pressaoInicial" value="${escAttr(linha.pressaoInicial)}"></div>
+      <div class="pf-col"><div class="rowlbl">Pressão final</div>
+        <input type="number" inputmode="decimal" step="0.1" data-path="${grp}|pressaoFinal" value="${escAttr(linha.pressaoFinal)}"></div>
+    </div>
+    ${vazaoBlockHTML(grp, 'vazaoInicial', 'inicial', linha.vazaoInicial)}
+    ${vazaoBlockHTML(grp, 'vazaoFinal', 'final', linha.vazaoFinal)}
+  </div>`;
+}
+
+function pontoCardHTML(p){
+  const status = pontoStatus(p);
+  return `
+  <div class="ponto-card ${p.tocado?'touched':''} ${status!=='pending'?status:''}" data-n="${p.numero}">
+    <div class="ponto-head">
+      <div class="n">Ponto ${p.numero} <span style="font-weight:400;color:var(--ink-soft);">· 1,6 m</span></div>
+      <div class="status">${status==='pending'?'Pendente':status==='ok'?'OK':'Com ocorrência'}</div>
+    </div>
+
+    <div class="row-item">
+      <div class="lbl">Gotejos entupidos<span class="sub">de 0 a 4 no trecho</span></div>
+      <div class="stepper">
+        <button type="button" data-role="ge-minus">−</button>
+        <div class="val">${p.gotejosEntupidos}</div>
+        <button type="button" data-role="ge-plus">+</button>
+      </div>
+    </div>
+    <div class="row-item">
+      <div class="lbl">Gotejos com defeito<span class="sub">de 0 a 4 no trecho</span></div>
+      <div class="stepper">
+        <button type="button" data-role="gd-minus">−</button>
+        <div class="val">${p.gotejosDefeituosos}</div>
+        <button type="button" data-role="gd-plus">+</button>
+      </div>
+    </div>
+
+    <div class="row-item">
+      <div class="lbl">Mangueira cortada</div>
+      <div class="chk-qty">
+        <input class="qty-input" type="number" min="1" data-role="qtdCortes" value="${p.qtdCortes}" style="display:${p.corte?'block':'none'}">
+        <div class="switch ${p.corte?'danger-on':''}" data-role="sw-corte"><div class="knob"></div></div>
+      </div>
+    </div>
+    ${p.corte?`
+    <div class="tipo-select-wrap">
+      <select data-role="corteTipo">
+        <option value="objeto_cortante" ${p.corteTipo==='objeto_cortante'?'selected':''}>Causa: objeto cortante</option>
+        <option value="outros" ${p.corteTipo==='outros'?'selected':''}>Causa: outros</option>
+      </select>
+      ${p.corteTipo==='outros'?`<input class="tipo-detalhe" type="text" data-role="corteDetalhe" placeholder="Especifique o que causou o corte" value="${escAttr(p.corteOutrosDetalhe)}">`:''}
+    </div>`:''}
+
+    <div class="row-item">
+      <div class="lbl">Furo na mangueira</div>
+      <div class="chk-qty">
+        <input class="qty-input" type="number" min="1" data-role="qtdFuros" value="${p.qtdFuros}" style="display:${p.furo?'block':'none'}">
+        <div class="switch ${p.furo?'danger-on':''}" data-role="sw-furo"><div class="knob"></div></div>
+      </div>
+    </div>
+    ${p.furo?`
+    <div class="tipo-select-wrap">
+      <select data-role="furoTipo">
+        <option value="roseta" ${p.furoTipo==='roseta'?'selected':''}>Causa: roseta</option>
+        <option value="objeto_pontiagudo" ${p.furoTipo==='objeto_pontiagudo'?'selected':''}>Causa: objeto pontiagudo</option>
+        <option value="roedores" ${p.furoTipo==='roedores'?'selected':''}>Causa: roedores</option>
+        <option value="outro" ${p.furoTipo==='outro'?'selected':''}>Causa: outros</option>
+      </select>
+      ${p.furoTipo==='outro'?`<input class="tipo-detalhe" type="text" data-role="furoDetalhe" placeholder="Especifique a causa do furo" value="${escAttr(p.furoOutroDetalhe)}">`:''}
+    </div>`:''}
+
+    <button type="button" class="obs-toggle" data-role="obs-toggle">${p.obs? '✎ editar observação do ponto' : '+ observação do ponto (opcional)'}</button>
+    <div class="ponto-obs" data-role="obs-wrap" style="display:${p.obs?'block':'none'}">
+      <textarea data-role="obs-text" placeholder="Detalhe o que foi observado neste ponto...">${escHTML(p.obs)}</textarea>
+    </div>
+
+    ${photoSectionHTML(p.fotos, 'ponto')}
+  </div>`;
+}
+
+function refreshPontoCard(v, p){
+  const wrap = document.querySelector(`#pontosWrap .ponto-card[data-n="${p.numero}"]`);
+  const tmp = document.createElement('div');
+  tmp.innerHTML = pontoCardHTML(p);
+  wrap.replaceWith(tmp.firstElementChild);
+  wirePontoEvents(v, p.numero);
+  refreshDots(v);
+}
+function refreshDots(v){
+  document.querySelectorAll('.line-track .dot').forEach((d,i)=>{
+    const p = v.pontos[i];
+    const st = pontoStatus(p);
+    d.className = 'dot ' + (st==='pending'?'':st);
+  });
+}
+
+function wirePontoEvents(v, onlyN){
+  const cards = onlyN
+    ? [document.querySelector(`#pontosWrap .ponto-card[data-n="${onlyN}"]`)]
+    : [...document.querySelectorAll('#pontosWrap .ponto-card')];
+
+  cards.forEach(card=>{
+    if(!card) return;
+    const n = parseInt(card.dataset.n,10);
+    const p = v.pontos.find(pt=>pt.numero===n);
+
+    card.querySelector('[data-role="ge-minus"]').onclick = ()=>{ p.gotejosEntupidos=Math.max(0,p.gotejosEntupidos-1); p.tocado=true; refreshPontoCard(v,p); };
+    card.querySelector('[data-role="ge-plus"]').onclick = ()=>{ p.gotejosEntupidos=Math.min(4,p.gotejosEntupidos+1); p.tocado=true; refreshPontoCard(v,p); };
+    card.querySelector('[data-role="gd-minus"]').onclick = ()=>{ p.gotejosDefeituosos=Math.max(0,p.gotejosDefeituosos-1); p.tocado=true; refreshPontoCard(v,p); };
+    card.querySelector('[data-role="gd-plus"]').onclick = ()=>{ p.gotejosDefeituosos=Math.min(4,p.gotejosDefeituosos+1); p.tocado=true; refreshPontoCard(v,p); };
+
+    card.querySelector('[data-role="sw-corte"]').onclick = ()=>{ p.corte=!p.corte; p.tocado=true; refreshPontoCard(v,p); };
+    card.querySelector('[data-role="sw-furo"]').onclick = ()=>{ p.furo=!p.furo; p.tocado=true; refreshPontoCard(v,p); };
+
+    const qc = card.querySelector('[data-role="qtdCortes"]');
+    if(qc) qc.addEventListener('input', e=>{ p.qtdCortes = parseInt(e.target.value,10)||1; });
+    const qf = card.querySelector('[data-role="qtdFuros"]');
+    if(qf) qf.addEventListener('input', e=>{ p.qtdFuros = parseInt(e.target.value,10)||1; });
+
+    const ct = card.querySelector('[data-role="corteTipo"]');
+    if(ct) ct.addEventListener('change', e=>{ p.corteTipo = e.target.value; refreshPontoCard(v,p); });
+    const cd = card.querySelector('[data-role="corteDetalhe"]');
+    if(cd) cd.addEventListener('input', e=>{ p.corteOutrosDetalhe = e.target.value; });
+
+    const ft = card.querySelector('[data-role="furoTipo"]');
+    if(ft) ft.addEventListener('change', e=>{ p.furoTipo = e.target.value; refreshPontoCard(v,p); });
+    const fd = card.querySelector('[data-role="furoDetalhe"]');
+    if(fd) fd.addEventListener('input', e=>{ p.furoOutroDetalhe = e.target.value; });
+
+    card.querySelector('[data-role="obs-toggle"]').onclick = ()=>{
+      const w = card.querySelector('[data-role="obs-wrap"]');
+      w.style.display = w.style.display==='none' ? 'block' : 'none';
+      if(w.style.display==='block') card.querySelector('[data-role="obs-text"]').focus();
+    };
+    card.querySelector('[data-role="obs-text"]').addEventListener('input', e=>{
+      p.obs = e.target.value; p.tocado = p.tocado || e.target.value.trim().length>0;
+    });
+
+    wirePhotoSection(card, p.fotos, ()=>{ p.tocado=true; refreshPontoCard(v,p); });
+  });
+}
+
+/* ===================== RENDER: SETOR COCO ===================== */
+function renderSetorCoco(){
+  const setor = getSetor(state.setorId);
+  const app = document.getElementById('app');
+  const v = setor.valvulas[state.valvIdx];
+  const r = resumoSetor(setor);
+
+  let html = `
+    <div class="card">
+      <div class="field-row">
+        <label>Identificação do setor</label>
+        <input type="text" id="fNome" placeholder="Ex.: C01" value="${escAttr(setor.nome)}">
+      </div>
+      <div class="grid-2">
+        <div class="field-row">
+          <label>Data da aferição</label>
+          <input type="date" id="fData" value="${setor.data}">
+        </div>
+        <div class="field-row">
+          <label>Responsável</label>
+          <input type="text" id="fResp" placeholder="Nome" value="${escAttr(setor.responsavel)}">
+        </div>
+      </div>
+      <div class="linha2-label-row">
+        <span style="font-size:0.7rem;color:var(--ink-soft);font-weight:700;">2ª LINHA AVALIADA</span>
+        <input type="text" id="fLinha2Label" value="${escAttr(setor.segundaLinhaLabel)}">
+      </div>
+      <div style="font-size:0.75rem;color:var(--ink-soft);margin-top:6px;">${r.avaliados}/${r.total} pontos aferidos no setor · ${r.problemas} com ocorrência</div>
+    </div>
+
+    <div class="tabs">
+      ${setor.valvulas.map((vv,i)=>`<div class="tab ${i===state.valvIdx?'active':''}" data-idx="${i}">${escHTML(vv.label)}</div>`).join('')}
+    </div>
+
+    <div class="section-title">Pressão (início, final e extremidade da mangueira)<div class="rule"></div></div>
+    <div class="dripline">
+      <div class="valve-label-row">
+        <span style="font-size:0.7rem;color:var(--ink-soft);font-weight:700;">VÁLVULA</span>
+        <input type="text" id="fValvLabel" value="${escAttr(v.label)}">
+      </div>
+      <div class="ends">
+        ${linhaCocoBlockHTML('linha1', 'Linha 1 (início)', v.linha1)}
+        ${linhaCocoBlockHTML('linha2', escHTML(setor.segundaLinhaLabel)+' (final)', v.linha2)}
+      </div>
+    </div>
+
+    <div class="section-title">80 pontos distribuídos na área<div class="rule"></div></div>
+    <div class="chip-row">
+      <div class="chip ${state.cocoFiltro==='todos'?'active':''}" data-f="todos">Todos (${setor.pontos.length})</div>
+      <div class="chip ${state.cocoFiltro==='pendentes'?'active':''}" data-f="pendentes">Pendentes (${setor.pontos.filter(p=>!p.tocado).length})</div>
+      <div class="chip ${state.cocoFiltro==='problema'?'active':''}" data-f="problema">Com ocorrência (${setor.pontos.filter(p=>p.tocado&&pontoTemProblemaCoco(p)).length})</div>
+    </div>
+    <div id="pontosWrapCoco">
+      ${setor.pontos.filter(filtroCocoFn()).map(p=>pontoCardHTMLCoco(p)).join('') || '<div class="empty-state">Nenhum ponto neste filtro.</div>'}
+    </div>
+
+    <div class="section-title">Observações gerais do setor<div class="rule"></div></div>
+    <div class="card" id="obsGeralCard">
+      <div class="field-row" style="margin-bottom:0;">
+        <label>Outras ocorrências visualizadas (fora dos pontos avaliados)</label>
+        <textarea id="fObsGeral" placeholder="Ex.: registro vazando, linha secundária danificada, etc.">${escHTML(setor.obsGeral)}</textarea>
+      </div>
+      ${photoSectionHTML(setor.obsFotos, 'obsGeral')}
+    </div>
+
+    <div class="footer-actions">
+      <button class="btn-primary" id="btnSalvarVoltar">Salvar e voltar aos setores</button>
+    </div>
+  `;
+  app.innerHTML = html;
+
+  document.getElementById('fNome').addEventListener('input', e=>{ setor.nome=e.target.value; });
+  document.getElementById('fData').addEventListener('input', e=>{ setor.data=e.target.value; });
+  document.getElementById('fResp').addEventListener('input', e=>{ setor.responsavel=e.target.value; });
+  document.getElementById('fLinha2Label').addEventListener('input', e=>{ setor.segundaLinhaLabel=e.target.value; });
+  document.getElementById('fValvLabel').addEventListener('input', e=>{ v.label=e.target.value; });
+
+  app.querySelectorAll('.tab').forEach(t=>{
+    t.onclick = ()=>{ state.valvIdx = parseInt(t.dataset.idx,10); render(); };
+  });
+  app.querySelectorAll('.chip').forEach(c=>{
+    c.onclick = ()=>{ state.cocoFiltro = c.dataset.f; render(); };
+  });
+
+  app.querySelectorAll('.line-end input').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const [grp, field] = inp.dataset.path.split('|');
+      v[grp][field] = e.target.value;
+    });
+  });
+
+  document.getElementById('fObsGeral').addEventListener('input', e=>{ setor.obsGeral = e.target.value; });
+  wirePhotoSection(document.getElementById('obsGeralCard'), setor.obsFotos, ()=>render());
+
+  wirePontoEventsCoco(setor);
+
+  document.getElementById('btnSalvarVoltar').onclick = ()=>{
+    if(!setor.nome.trim()){
+      if(!confirm('Este setor está sem nome/identificação. Salvar mesmo assim?')) return;
+    }
+    registrarHistorico(setor, 'irrigacao');
+    showToast('Dados salvos');
+    state.view='modulo-list'; render();
+  };
+}
+function filtroCocoFn(){
+  if(state.cocoFiltro==='pendentes') return p=>!p.tocado;
+  if(state.cocoFiltro==='problema') return p=>p.tocado && pontoTemProblemaCoco(p);
+  return ()=>true;
+}
+function linhaCocoBlockHTML(grp, titulo, linha){
+  return `
+  <div class="line-end">
+    <div class="pos">${titulo}</div>
+    <div class="pf-pair">
+      <div class="pf-col"><div class="rowlbl">Pressão início</div>
+        <input type="number" inputmode="decimal" step="0.1" data-path="${grp}|pressaoInicio" value="${escAttr(linha.pressaoInicio)}"></div>
+      <div class="pf-col"><div class="rowlbl">Pressão final</div>
+        <input type="number" inputmode="decimal" step="0.1" data-path="${grp}|pressaoFinal" value="${escAttr(linha.pressaoFinal)}"></div>
+    </div>
+  </div>`;
+}
+function pontoCardHTMLCoco(p){
+  const status = pontoStatusCoco(p);
+  return `
+  <div class="ponto-card ${p.tocado?'touched':''} ${status!=='pending'?status:''}" data-n="${p.numero}">
+    <div class="ponto-head">
+      <div class="n">Ponto ${p.numero}</div>
+      <div class="status">${status==='pending'?'Pendente':status==='ok'?'OK':'Com ocorrência'}</div>
+    </div>
+
+    <div class="row-item">
+      <div class="lbl">Microaspersor entupido</div>
+      <div class="switch ${p.microEntupido?'danger-on':''}" data-role="sw-entupido"><div class="knob"></div></div>
+    </div>
+    ${p.microEntupido?`
+    <div class="tipo-select-wrap">
+      <select data-role="causaEntupimento">
+        <option value="particulas" ${p.causaEntupimento==='particulas'?'selected':''}>Causa: partículas</option>
+        <option value="materia_organica" ${p.causaEntupimento==='materia_organica'?'selected':''}>Causa: matéria orgânica</option>
+        <option value="precipitados" ${p.causaEntupimento==='precipitados'?'selected':''}>Causa: precipitados</option>
+        <option value="outros" ${p.causaEntupimento==='outros'?'selected':''}>Causa: outros materiais</option>
+      </select>
+      ${p.causaEntupimento==='outros'?`<input class="tipo-detalhe" type="text" data-role="entupimentoDetalhe" placeholder="Especifique o material" value="${escAttr(p.causaEntupimentoDetalhe)}">`:''}
+    </div>`:''}
+
+    <div class="row-item">
+      <div class="lbl">Microaspersor com defeito</div>
+      <div class="switch ${p.microDefeito?'danger-on':''}" data-role="sw-defeito"><div class="knob"></div></div>
+    </div>
+    ${p.microDefeito?`
+    <div class="tipo-select-wrap">
+      <input class="tipo-detalhe" style="margin-top:0;" type="text" data-role="tipoProblemaDefeito" placeholder="Descreva o tipo de problema apresentado" value="${escAttr(p.tipoProblemaDefeito)}">
+    </div>`:''}
+
+    <div class="row-item">
+      <div class="lbl">Mangueira cortada/danificada</div>
+      <div class="switch ${p.corte?'danger-on':''}" data-role="sw-corte"><div class="knob"></div></div>
+    </div>
+    ${p.corte?`
+    <div class="tipo-select-wrap">
+      <select data-role="causaCorte">
+        <option value="objeto_cortante" ${p.causaCorte==='objeto_cortante'?'selected':''}>Causa: objeto cortante</option>
+        <option value="objeto_pontiagudo" ${p.causaCorte==='objeto_pontiagudo'?'selected':''}>Causa: objeto pontiagudo</option>
+        <option value="outras" ${p.causaCorte==='outras'?'selected':''}>Causa: outras causas</option>
+      </select>
+      ${p.causaCorte==='outras'?`<input class="tipo-detalhe" type="text" data-role="corteDetalhe" placeholder="Especifique a causa" value="${escAttr(p.causaCorteDetalhe)}">`:''}
+    </div>`:''}
+
+    <div class="row-item">
+      <div class="lbl">Estaca — posição/ângulo<span class="sub">${p.estacaInadequada?'Não conforme':'Conforme'}</span></div>
+      <div class="switch ${p.estacaInadequada?'danger-on':''}" data-role="sw-estaca"><div class="knob"></div></div>
+    </div>
+
+    <div class="row-item">
+      <div class="lbl">Distância microaspersor–coqueiro<span class="sub">${p.distanciaInadequada?'Não conforme':'Conforme'}</span></div>
+      <div class="switch ${p.distanciaInadequada?'danger-on':''}" data-role="sw-distancia"><div class="knob"></div></div>
+    </div>
+
+    <button type="button" class="obs-toggle" data-role="obs-toggle">${p.obs? '✎ editar observação do ponto' : '+ observação do ponto (opcional)'}</button>
+    <div class="ponto-obs" data-role="obs-wrap" style="display:${p.obs?'block':'none'}">
+      <textarea data-role="obs-text" placeholder="Detalhe o que foi observado neste ponto...">${escHTML(p.obs)}</textarea>
+    </div>
+
+    ${photoSectionHTML(p.fotos, 'ponto')}
+  </div>`;
+}
+function refreshPontoCardCoco(setor, p){
+  const wrap = document.querySelector(`#pontosWrapCoco .ponto-card[data-n="${p.numero}"]`);
+  if(!wrap) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = pontoCardHTMLCoco(p);
+  wrap.replaceWith(tmp.firstElementChild);
+  wirePontoEventsCoco(setor, p.numero);
+  // atualiza contadores dos chips sem recarregar tudo
+  const chips = document.querySelectorAll('.chip-row .chip');
+  if(chips.length===3){
+    chips[0].textContent = `Todos (${setor.pontos.length})`;
+    chips[1].textContent = `Pendentes (${setor.pontos.filter(pt=>!pt.tocado).length})`;
+    chips[2].textContent = `Com ocorrência (${setor.pontos.filter(pt=>pt.tocado&&pontoTemProblemaCoco(pt)).length})`;
+  }
+}
+function wirePontoEventsCoco(setor, onlyN){
+  const cards = onlyN
+    ? [document.querySelector(`#pontosWrapCoco .ponto-card[data-n="${onlyN}"]`)]
+    : [...document.querySelectorAll('#pontosWrapCoco .ponto-card')];
+
+  cards.forEach(card=>{
+    if(!card) return;
+    const n = parseInt(card.dataset.n,10);
+    const p = setor.pontos.find(pt=>pt.numero===n);
+
+    card.querySelector('[data-role="sw-entupido"]').onclick = ()=>{ p.microEntupido=!p.microEntupido; p.tocado=true; refreshPontoCardCoco(setor,p); };
+    card.querySelector('[data-role="sw-defeito"]').onclick = ()=>{ p.microDefeito=!p.microDefeito; p.tocado=true; refreshPontoCardCoco(setor,p); };
+    card.querySelector('[data-role="sw-corte"]').onclick = ()=>{ p.corte=!p.corte; p.tocado=true; refreshPontoCardCoco(setor,p); };
+    card.querySelector('[data-role="sw-estaca"]').onclick = ()=>{ p.estacaInadequada=!p.estacaInadequada; p.tocado=true; refreshPontoCardCoco(setor,p); };
+
+    const ce = card.querySelector('[data-role="causaEntupimento"]');
+    if(ce) ce.addEventListener('change', e=>{ p.causaEntupimento=e.target.value; refreshPontoCardCoco(setor,p); });
+    const ced = card.querySelector('[data-role="entupimentoDetalhe"]');
+    if(ced) ced.addEventListener('input', e=>{ p.causaEntupimentoDetalhe=e.target.value; });
+
+    const tpd = card.querySelector('[data-role="tipoProblemaDefeito"]');
+    if(tpd) tpd.addEventListener('input', e=>{ p.tipoProblemaDefeito=e.target.value; });
+
+    const cc = card.querySelector('[data-role="causaCorte"]');
+    if(cc) cc.addEventListener('change', e=>{ p.causaCorte=e.target.value; refreshPontoCardCoco(setor,p); });
+    const ccd = card.querySelector('[data-role="corteDetalhe"]');
+    if(ccd) ccd.addEventListener('input', e=>{ p.causaCorteDetalhe=e.target.value; });
+
+    card.querySelector('[data-role="sw-distancia"]').onclick = ()=>{ p.distanciaInadequada=!p.distanciaInadequada; p.tocado=true; refreshPontoCardCoco(setor,p); };
+
+    card.querySelector('[data-role="obs-toggle"]').onclick = ()=>{
+      const w = card.querySelector('[data-role="obs-wrap"]');
+      w.style.display = w.style.display==='none' ? 'block' : 'none';
+      if(w.style.display==='block') card.querySelector('[data-role="obs-text"]').focus();
+    };
+    card.querySelector('[data-role="obs-text"]').addEventListener('input', e=>{
+      p.obs = e.target.value; p.tocado = p.tocado || e.target.value.trim().length>0;
+    });
+
+    wirePhotoSection(card, p.fotos, ()=>{ p.tocado=true; refreshPontoCardCoco(setor,p); });
+  });
+}
+
+/* ---------------- utils ---------------- */
+function escHTML(s){ return (s||'').replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function escAttr(s){ return (s||'').toString().replace(/"/g,'&quot;'); }
+
+/* ---------------- MASTER RENDER ---------------- */
+function render(){
+  renderHeader();
+  if(state.view==='home'){ renderHome(); }
+  else if(state.view==='modulo-list'){ renderModuloList(); }
+  else if(state.view==='historico'){ renderHistorico(); }
+  else{
+    const setor = getSetor(state.setorId);
+    if(setor && setor.cultura==='coco') renderSetorCoco(); else renderSetor();
+  }
+  window.scrollTo(0,0);
+}
+render();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('service-worker.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
