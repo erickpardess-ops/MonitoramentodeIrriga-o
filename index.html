@@ -294,7 +294,7 @@
 
 <script>
 /* ---------------- STATE ---------------- */
-const APP_VERSION = '1.9';
+const APP_VERSION = '2.0';
 const MODULOS = [
   { id:'irrigacao_cacau', titulo:'Monitoramento de Irrigação', sub:'Cacau', emoji:'💧', canto:'🍫', cor:'#2F4A2C', cultura:'cacau', tipo:'irrigacao' },
   { id:'irrigacao_coco', titulo:'Monitoramento de Irrigação', sub:'Coco', emoji:'💧', canto:'🥥', cor:'#1F5A78', cultura:'coco', tipo:'irrigacao' },
@@ -772,6 +772,15 @@ function buildRowsPragas(lista){
   });
   return rows;
 }
+function buildHistoricoRows(lista, modulo){
+  const rows=[];
+  lista.forEach(s=>{
+    (s.historico||[]).filter(h=>h.modulo===modulo).forEach(h=>{
+      rows.push({ Setor:s.nome, Data:h.data, Avaliados:h.avaliados, Ocorrencias:h.problemas, Total:h.total });
+    });
+  });
+  return rows;
+}
 async function sendToSheets(){
   if(!state.webAppUrl){ showToast('Configure a URL do Google Sheets primeiro'); return; }
   const cacauList = state.setores.filter(s=>s.cultura!=='coco');
@@ -782,7 +791,10 @@ async function sendToSheets(){
     cacauValvulas: buildValvulasCacau(cacauList),
     cacauPragas: buildRowsPragas(cacauList),
     cocoPontos: buildRowsCoco(cocoList),
-    cocoValvulas: buildValvulasCoco(cocoList)
+    cocoValvulas: buildValvulasCoco(cocoList),
+    cacauIrrigacaoHistorico: buildHistoricoRows(cacauList, 'irrigacao'),
+    cacauPragasHistorico: buildHistoricoRows(cacauList, 'pragas'),
+    cocoIrrigacaoHistorico: buildHistoricoRows(cocoList, 'irrigacao')
   };
   showToast('Enviando para o Google Sheets…');
   try{
