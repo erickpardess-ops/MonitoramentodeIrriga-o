@@ -290,11 +290,99 @@
 <main id="app"></main>
 <div class="toast" id="toast"></div>
 <div class="lightbox" id="lightbox"><button class="close" id="lbClose">✕</button><img id="lbImg" src=""></div>
-<input type="file" id="fileInput" accept="application/json">
 
-<script>
+<script type="module">
+/* ---------------- FIREBASE ---------------- */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import {
+  getFirestore, doc, setDoc, deleteDoc, getDoc, getDocs, collection,
+  enableIndexedDbPersistence
+} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDcvkoLsDzInc0tJT98AO9RM2NxdBodyPw",
+  authDomain: "monitoramentos-74fa6.firebaseapp.com",
+  projectId: "monitoramentos-74fa6",
+  storageBucket: "monitoramentos-74fa6.firebasestorage.app",
+  messagingSenderId: "449088603457",
+  appId: "1:449088603457:web:5c6b956c30de67d2600dc0"
+};
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
+try{
+  // permite continuar funcionando offline: grava localmente e sincroniza
+  // sozinho quando a internet voltar.
+  await enableIndexedDbPersistence(db);
+}catch(e){
+  // "failed-precondition" (aberto em duas abas ao mesmo tempo) ou
+  // "unimplemented" (navegador sem suporte) — o app continua funcionando,
+  // só sem cache offline do Firestore nesses casos raros.
+  console.warn('Persistência offline do Firestore não ativada:', e.code);
+}
+
+function limparParaFirestore(obj){
+  // remove undefined/funções e (por enquanto) tira as fotos, pra manter
+  // cada documento bem abaixo do limite de 1 MB do Firestore.
+  const limpo = JSON.parse(JSON.stringify(obj));
+  function tirarFotos(o){
+    if(!o || typeof o!=='object') return;
+    if(Array.isArray(o.fotos)) o.fotos = [];
+    if(Array.isArray(o.obsFotos)) o.obsFotos = [];
+    Object.values(o).forEach(v=>{
+      if(Array.isArray(v)) v.forEach(tirarFotos);
+      else if(v && typeof v==='object') tirarFotos(v);
+    });
+  }
+  tirarFotos(limpo);
+  return limpo;
+}
+
+async function carregarTudoDoFirestore(){
+  const snap = await getDocs(collection(db, 'setores'));
+  const setores = [];
+  snap.forEach(d=> setores.push(d.data()));
+  let config = null;
+  try{
+    const cfgDoc = await getDoc(doc(db,'config','app'));
+    if(cfgDoc.exists()) config = cfgDoc.data();
+  }catch(e){}
+  return { setores, config };
+}
+async function salvarSetorFirestore(setor){
+  try{ await setDoc(doc(db,'setores', setor.id), limparParaFirestore(setor)); }
+  catch(e){ console.error('Falha ao salvar no Firestore:', e); }
+}
+async function excluirSetorFirestore(id){
+  try{ await deleteDoc(doc(db,'setores', id)); }
+  catch(e){ console.error('Falha ao excluir no Firestore:', e); }
+}
+async function salvarConfigFirestore(){
+  try{
+    await setDoc(doc(db,'config','app'), { pragasTipos: state.pragasTipos, webAppUrl: state.webAppUrl });
+  }catch(e){ console.error('Falha ao salvar config no Firestore:', e); }
+}
+
+let timerSalvarSetor = {};
+function agendarSalvarSetor(setor){
+  if(!setor) return;
+  clearTimeout(timerSalvarSetor[setor.id]);
+  timerSalvarSetor[setor.id] = setTimeout(()=>salvarSetorFirestore(setor), 1200);
+  agendarAutoSyncSheets();
+}
+let timerSalvarConfig = null;
+function agendarSalvarConfig(){
+  clearTimeout(timerSalvarConfig);
+  timerSalvarConfig = setTimeout(salvarConfigFirestore, 1200);
+}
+let timerAutoSync = null;
+function agendarAutoSyncSheets(){
+  clearTimeout(timerAutoSync);
+  timerAutoSync = setTimeout(()=>{ sendToSheets(true); }, 4000);
+}
+
+
 /* ---------------- STATE ---------------- */
-const APP_VERSION = '2.0';
+const APP_VERSION = '3.0';
 const MODULOS = [
   { id:'irrigacao_cacau', titulo:'Monitoramento de Irrigação', sub:'Cacau', emoji:'💧', canto:'🍫', cor:'#2F4A2C', cultura:'cacau', tipo:'irrigacao' },
   { id:'irrigacao_coco', titulo:'Monitoramento de Irrigação', sub:'Coco', emoji:'💧', canto:'🥥', cor:'#1F5A78', cultura:'coco', tipo:'irrigacao' },
@@ -322,6 +410,19 @@ let state = {
     {id:'p13', nome:'Tripes', tipo:'padrao'}
   ]
 };
+
+/* Salva sozinho no Firestore (e agenda o envio ao Sheets) sempre que algo
+   muda dentro da tela de um setor — sem precisar de botão "Salvar". */
+document.getElementById('app').addEventListener('input', aoInteragirComSetor);
+document.getElementById('app').addEventListener('change', aoInteragirComSetor);
+document.getElementById('app').addEventListener('click', aoInteragirComSetor);
+function aoInteragirComSetor(){
+  if(state.view!=='setor') return;
+  const setor = getSetor(state.setorId);
+  if(!setor) return;
+  agendarSalvarSetor(setor);
+  agendarSalvarConfig(); // cobre também edições no gerenciador de pragas
+}
 
 function uid(){ return 's' + Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4); }
 
@@ -584,11 +685,6 @@ function download(filename, content, type){
   a.href=url; a.download=filename; document.body.appendChild(a); a.click();
   document.body.removeChild(a); URL.revokeObjectURL(url);
 }
-function exportJSON(){
-  const stamp = new Date().toISOString().slice(0,16).replace(/[-T:]/g,'');
-  download(`monitoramento-cacau-coco_${stamp}.json`, JSON.stringify({setores:state.setores, webAppUrl:state.webAppUrl, pragasTipos:state.pragasTipos}, null, 2), 'application/json');
-  showToast('Backup JSON exportado (inclui fotos)');
-}
 function csvEsc(v){
   v = (v===undefined||v===null) ? '' : String(v);
   if(/[;"\n]/.test(v)) v = '"'+v.replace(/"/g,'""')+'"';
@@ -781,11 +877,11 @@ function buildHistoricoRows(lista, modulo){
   });
   return rows;
 }
-async function sendToSheets(){
-  if(!state.webAppUrl){ showToast('Configure a URL do Google Sheets primeiro'); return; }
+async function sendToSheets(silencioso){
+  if(!state.webAppUrl){ if(!silencioso) showToast('Configure a URL do Google Sheets primeiro'); return; }
   const cacauList = state.setores.filter(s=>s.cultura!=='coco');
   const cocoList = state.setores.filter(s=>s.cultura==='coco');
-  if(cacauList.length===0 && cocoList.length===0){ showToast('Nenhum setor cadastrado ainda'); return; }
+  if(cacauList.length===0 && cocoList.length===0){ if(!silencioso) showToast('Nenhum setor cadastrado ainda'); return; }
   const payload = {
     cacauPontos: buildRowsCacau(cacauList),
     cacauValvulas: buildValvulasCacau(cacauList),
@@ -796,7 +892,7 @@ async function sendToSheets(){
     cacauPragasHistorico: buildHistoricoRows(cacauList, 'pragas'),
     cocoIrrigacaoHistorico: buildHistoricoRows(cocoList, 'irrigacao')
   };
-  showToast('Enviando para o Google Sheets…');
+  if(!silencioso) showToast('Enviando para o Google Sheets…');
   try{
     const res = await fetch(state.webAppUrl, {
       method:'POST',
@@ -807,10 +903,12 @@ async function sendToSheets(){
     let json = null;
     try{ json = JSON.parse(text); }catch(e){}
     if(json && json.ok){
-      showToast('Dados enviados ao Google Sheets!');
+      showToast('✓ Sincronizado com o Google Sheets');
     } else if(json && json.ok===false){
-      alert('O Google Apps Script recebeu os dados, mas retornou um erro:\n\n'+json.error);
+      if(silencioso) showToast('Erro ao sincronizar com o Sheets (toque em "Testar link" para detalhes)');
+      else alert('O Google Apps Script recebeu os dados, mas retornou um erro:\n\n'+json.error);
     } else {
+      if(silencioso){ showToast('Sincronização automática falhou — toque em "Testar link" para ver o motivo'); return; }
       alert('O envio chegou ao Google, mas a resposta não foi o JSON esperado (status HTTP '+res.status+').\n\n'
         +'As causas mais comuns são:\n'
         +'• A implantação do Web App não está com "Quem pode acessar: Qualquer pessoa"\n'
@@ -818,6 +916,7 @@ async function sendToSheets(){
         +'Início da resposta recebida:\n'+text.slice(0,300));
     }
   }catch(err){
+    if(silencioso){ showToast('Sem internet — vai tentar sincronizar de novo na próxima alteração'); return; }
     alert('Falha de rede ao tentar enviar: '+err.message+'\n\nConfira sua conexão com a internet e se a URL colada termina em "/exec".');
   }
 }
@@ -825,7 +924,8 @@ function configurarWebAppUrl(){
   const url = prompt('Cole aqui a URL do Web App do Google Apps Script (termina em /exec):', state.webAppUrl||'');
   if(url!==null){
     state.webAppUrl = url.trim();
-    showToast(state.webAppUrl ? 'URL salva (inclua no backup JSON para não perder)' : 'URL removida');
+    agendarSalvarConfig();
+    showToast(state.webAppUrl ? 'URL salva' : 'URL removida');
   }
 }
 async function testarWebAppUrl(){
@@ -855,29 +955,6 @@ async function testarWebAppUrl(){
       +'   na implantação — só salvar o script não atualiza a URL publicada.');
   }
 }
-function importJSON(file){
-  const reader = new FileReader();
-  reader.onload = e=>{
-    try{
-      const data = JSON.parse(e.target.result);
-      if(!data.setores || !Array.isArray(data.setores)) throw new Error('formato inválido');
-      data.setores.forEach(s=>{ s.id = uid(); });
-      migrarSetoresPragas(data.setores);
-      state.setores = state.setores.concat(data.setores);
-      if(data.webAppUrl) state.webAppUrl = data.webAppUrl;
-      if(data.pragasTipos && Array.isArray(data.pragasTipos)) state.pragasTipos = data.pragasTipos;
-      showToast(`${data.setores.length} setor(es) importado(s)`);
-      state.view='home'; render();
-    }catch(err){
-      showToast('Arquivo inválido');
-    }
-  };
-  reader.readAsText(file);
-}
-document.getElementById('fileInput').addEventListener('change', e=>{
-  if(e.target.files[0]) importJSON(e.target.files[0]);
-  e.target.value='';
-});
 
 /* ---------------- RENDER: HEADER ---------------- */
 function renderHeader(){
@@ -907,11 +984,9 @@ function renderHeader(){
   }
 }
 function openMenu(){
-  const choice = confirm('Exportar backup em JSON agora? (inclui fotos)\n\nOK = Exportar JSON\nCancelar = ver outras opções');
-  if(choice){ exportJSON(); return; }
-  const choice2 = confirm('Exportar planilha CSV (para Excel)?\n\nOK = Exportar CSV\nCancelar = Importar arquivo JSON');
-  if(choice2){ exportCSV(); return; }
-  document.getElementById('fileInput').click();
+  const choice = confirm('Exportar planilha CSV (para Excel)?\n\nOK = Exportar CSV\nCancelar = Testar/configurar o link do Google Sheets');
+  if(choice){ exportCSV(); return; }
+  testarWebAppUrl();
 }
 
 /* ---------------- RENDER: HOME (HUB DE MÓDULOS) ---------------- */
@@ -926,25 +1001,22 @@ function renderHome(){
         <div class="modulo-sub">${m.sub}</div>
       </div>`).join('')}
     </div>
+    <div style="font-size:0.72rem;color:var(--ink-soft);text-align:center;margin:-6px 0 14px;">☁️ Salvo automaticamente — sincroniza sozinho com o Google Sheets</div>
     <div class="toolbar" style="margin-top:6px;">
-      <button class="btn-ghost" id="btnExpJSON">💾 Salvar backup (.json)</button>
       <button class="btn-ghost" id="btnExpCSV">📊 Exportar planilha (.csv)</button>
-      <button class="btn-ghost" id="btnImp">📥 Importar backup</button>
       <button class="btn-ghost" id="btnConfigSheets">🔗 Configurar Google Sheets</button>
       <button class="btn-ghost" id="btnTestarSheets">🧪 Testar link do Sheets</button>
-      <button class="btn-ghost" id="btnEnviarSheets" style="border-color:var(--forest);color:var(--forest);">☁️ Enviar para Google Sheets</button>
+      <button class="btn-ghost" id="btnEnviarSheets" style="border-color:var(--forest);color:var(--forest);">☁️ Sincronizar agora</button>
     </div>
   `;
   app.innerHTML = html;
   app.querySelectorAll('.modulo-tile').forEach(t=>{
     t.onclick = ()=>{ state.modulo = t.dataset.mod; state.view='modulo-list'; render(); };
   });
-  document.getElementById('btnExpJSON').onclick = exportJSON;
   document.getElementById('btnExpCSV').onclick = exportCSV;
-  document.getElementById('btnImp').onclick = ()=>document.getElementById('fileInput').click();
   document.getElementById('btnConfigSheets').onclick = configurarWebAppUrl;
   document.getElementById('btnTestarSheets').onclick = testarWebAppUrl;
-  document.getElementById('btnEnviarSheets').onclick = sendToSheets;
+  document.getElementById('btnEnviarSheets').onclick = ()=>sendToSheets();
 }
 
 function resumoSetorModulo(setor, tipo){
@@ -1000,6 +1072,7 @@ function renderModuloList(){
   document.getElementById('btnNovoSetorMod').onclick = ()=>{
     const s = m.cultura==='coco' ? novoSetorCoco() : novoSetor();
     state.setores.push(s);
+    salvarSetorFirestore(s);
     state.setorId = s.id; state.valvIdx=0; state.view='setor';
     render();
   };
@@ -1009,6 +1082,7 @@ function renderModuloList(){
     const novos = gerador().filter(s=>!existentes.has(s.nome));
     if(novos.length===0){ showToast(`Os setores padrão de ${m.sub} já estão cadastrados`); return; }
     state.setores = state.setores.concat(novos);
+    novos.forEach(salvarSetorFirestore);
     showToast(`${novos.length} setor(es) de ${m.sub} adicionados`);
     render();
   };
@@ -1019,6 +1093,7 @@ function renderModuloList(){
     row.querySelector('.btn-del').onclick = ()=>{
       if(confirm('Excluir este setor e todos os dados aferidos nele?')){
         state.setores = state.setores.filter(s=>s.id!==id);
+        excluirSetorFirestore(id);
         render();
       }
     };
@@ -1772,6 +1847,22 @@ function render(){
     if(setor && setor.cultura==='coco') renderSetorCoco(); else renderSetor();
   }
   window.scrollTo(0,0);
+}
+/* ---------------- CARGA INICIAL DO FIRESTORE ---------------- */
+renderHeader();
+document.getElementById('app').innerHTML = '<div class="empty-state">Carregando seus dados…</div>';
+try{
+  const { setores, config } = await carregarTudoDoFirestore();
+  state.setores = setores;
+  if(config){
+    if(config.webAppUrl) state.webAppUrl = config.webAppUrl;
+    if(Array.isArray(config.pragasTipos) && config.pragasTipos.length) state.pragasTipos = config.pragasTipos;
+  }
+  migrarSetoresPragas(state.setores);
+  showToast(setores.length ? `${setores.length} setor(es) carregado(s)` : 'Pronto — nenhum setor ainda');
+}catch(err){
+  console.error('Falha ao carregar do Firestore:', err);
+  showToast('Sem conexão — mostrando dados salvos localmente (se houver)');
 }
 render();
 

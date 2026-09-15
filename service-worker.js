@@ -1,6 +1,6 @@
 // Service worker do app de Monitoramento de Irrigação (Cacau & Coco)
 // Lembrete: suba este número de versão a cada atualização publicada.
-const CACHE_NAME = 'irrigacao-cacau-coco-v2.0';
+const CACHE_NAME = 'irrigacao-cacau-coco-v3.0';
 const ASSETS = [
   './',
   './index.html',
@@ -15,7 +15,9 @@ const ASSETS = [
   './icons/icon-192.png',
   './icons/icon-384.png',
   './icons/icon-512.png',
-  './icons/icon-512-maskable.png'
+  './icons/icon-512-maskable.png',
+  'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js',
+  'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js'
 ];
 
 self.addEventListener('install', (event) => {
