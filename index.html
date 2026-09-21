@@ -382,7 +382,7 @@ function agendarAutoSyncSheets(){
 
 
 /* ---------------- STATE ---------------- */
-const APP_VERSION = '3.0';
+const APP_VERSION = '3.1';
 const MODULOS = [
   { id:'irrigacao_cacau', titulo:'Monitoramento de Irrigação', sub:'Cacau', emoji:'💧', canto:'🍫', cor:'#2F4A2C', cultura:'cacau', tipo:'irrigacao' },
   { id:'irrigacao_coco', titulo:'Monitoramento de Irrigação', sub:'Coco', emoji:'💧', canto:'🥥', cor:'#1F5A78', cultura:'coco', tipo:'irrigacao' },
@@ -485,13 +485,15 @@ function novoPontoCoco(numero){
     microEntupido:false, causaEntupimento:'particulas', causaEntupimentoDetalhe:'',
     microDefeito:false, tipoProblemaDefeito:'',
     corte:false, causaCorte:'objeto_cortante', causaCorteDetalhe:'',
-    estacaInadequada:false, distanciaInadequada:false,
+    vazamentoMicrotubo:false,
+    alturaEstacaInadequada:false, anguloEstacaInadequada:false,
+    distanciaInadequada:false,
     obs:'', fotos:[], tocado:false
   };
 }
 function novaLinhaCoco(){ return { pressaoInicio:'', pressaoFinal:'' }; }
 function novaValvulaCoco(label){
-  return { label, linha1: novaLinhaCoco(), linha2: novaLinhaCoco() };
+  return { label, linha1: novaLinhaCoco(), linha2: novaLinhaCoco(), pontos: Array.from({length:80}, (_,i)=>novoPontoCoco(i+1)) };
 }
 function novoSetorCoco(nome){
   return {
@@ -502,7 +504,6 @@ function novoSetorCoco(nome){
     responsavel: '',
     segundaLinhaLabel: 'Linha 40',
     valvulas: [novaValvulaCoco('Válvula 1'), novaValvulaCoco('Válvula 2'), novaValvulaCoco('Válvula 3')],
-    pontos: Array.from({length:80}, (_,i)=>novoPontoCoco(i+1)),
     obsGeral: '', obsFotos: [],
     historico: []
   };
@@ -522,7 +523,10 @@ function gerarSetoresPadraoCoco(){
     return s;
   });
 }
-function pontoTemProblemaCoco(p){ return p.microEntupido || p.microDefeito || p.corte || p.estacaInadequada || p.distanciaInadequada; }
+function pontoTemProblemaCoco(p){
+  return p.microEntupido || p.microDefeito || p.corte || p.vazamentoMicrotubo ||
+    p.alturaEstacaInadequada || p.anguloEstacaInadequada || p.distanciaInadequada;
+}
 function pontoStatusCoco(p){
   if(!p.tocado) return 'pending';
   return pontoTemProblemaCoco(p) ? 'danger' : 'ok';
@@ -567,9 +571,14 @@ function registrarHistorico(setor, tipo){
 }
 function resumoSetor(setor){
   if(setor.cultura==='coco'){
-    let avaliados=0, problemas=0;
-    setor.pontos.forEach(p=>{ if(p.tocado){ avaliados++; if(pontoTemProblemaCoco(p)) problemas++; } });
-    return {avaliados, problemas, total:setor.pontos.length};
+    let avaliados=0, problemas=0, total=0;
+    setor.valvulas.forEach(v=>{
+      v.pontos.forEach(p=>{
+        total++;
+        if(p.tocado){ avaliados++; if(pontoTemProblemaCoco(p)) problemas++; }
+      });
+    });
+    return {avaliados, problemas, total};
   }
   let avaliados=0, problemas=0, total=0;
   setor.valvulas.forEach(v=>{
@@ -595,7 +604,22 @@ function getSetor(id){ return state.setores.find(s=>s.id===id); }
 function migrarSetoresPragas(lista){
   lista.forEach(s=>{
     if(!Array.isArray(s.historico)) s.historico = [];
-    if(s.cultura==='coco') return;
+    if(s.cultura==='coco'){
+      // pontos do coco passaram a ficar por válvula (antes eram por setor)
+      if(Array.isArray(s.pontos)) delete s.pontos;
+      (s.valvulas||[]).forEach(v=>{
+        if(!Array.isArray(v.pontos) || v.pontos.length===0){
+          v.pontos = Array.from({length:80}, (_,i)=>novoPontoCoco(i+1));
+        } else {
+          v.pontos.forEach(p=>{
+            if(p.vazamentoMicrotubo===undefined) p.vazamentoMicrotubo = false;
+            if(p.alturaEstacaInadequada===undefined) p.alturaEstacaInadequada = !!p.estacaInadequada;
+            if(p.anguloEstacaInadequada===undefined) p.anguloEstacaInadequada = !!p.estacaInadequada;
+          });
+        }
+      });
+      return;
+    }
     (s.valvulas||[]).forEach(v=>{
       if(v.pragas) delete v.pragas; // formato antigo (por planta) descontinuado
       if(!v.pragasContagem || typeof v.pragasContagem!=='object') v.pragasContagem = {};
@@ -733,7 +757,7 @@ function exportCSVCoco(lista){
     'Micro_Entupido','Causa_Entupimento','Detalhe_Entupimento',
     'Micro_Defeito','Tipo_Problema_Defeito',
     'Mangueira_Cortada','Causa_Corte','Detalhe_Corte',
-    'Estaca_Posicao_Angulo_Inadequado','Distancia_Micro_Coqueiro_Inadequada',
+    'Vazamento_Microtubo','Altura_Estaca_Inadequada','Angulo_Estaca_Inadequada','Distancia_Micro_Coqueiro_Inadequada',
     'Qtd_Fotos_Ponto','Obs_Ponto','Obs_Geral_Setor','Qtd_Fotos_ObsGeral'];
   const rows=[cols.join(';')];
   lista.forEach(s=>{
@@ -742,20 +766,20 @@ function exportCSVCoco(lista){
         s.nome, s.segundaLinhaLabel, s.data, s.responsavel, v.label,
         v.linha1.pressaoInicio, v.linha1.pressaoFinal,
         v.linha2.pressaoInicio, v.linha2.pressaoFinal,
-        '(pressões da válvula — ver linha de pontos abaixo p/ inspeção)','','','','','','','','','','','','','','',''
+        '(pressões da válvula — ver pontos abaixo p/ inspeção)','','','','','','','','','','','','','','','','',''
       ].map(csvEsc).join(';'));
-    });
-    s.pontos.forEach(p=>{
-      rows.push([
-        s.nome, s.segundaLinhaLabel, s.data, s.responsavel, '',
-        '','','','',
-        p.numero, p.tocado?'Sim':'Nao',
-        p.microEntupido?'Sim':'Nao', p.microEntupido?tipoLabel(ENTUP_LABELS,p.causaEntupimento):'', p.microEntupido&&p.causaEntupimento==='outros'?p.causaEntupimentoDetalhe:'',
-        p.microDefeito?'Sim':'Nao', p.microDefeito?p.tipoProblemaDefeito:'',
-        p.corte?'Sim':'Nao', p.corte?tipoLabel(CORTE_COCO_LABELS,p.causaCorte):'', p.corte&&p.causaCorte==='outras'?p.causaCorteDetalhe:'',
-        p.estacaInadequada?'Sim':'Nao', p.distanciaInadequada?'Sim':'Nao',
-        p.fotos.length, p.obs, s.obsGeral, s.obsFotos.length
-      ].map(csvEsc).join(';'));
+      v.pontos.forEach(p=>{
+        rows.push([
+          s.nome, s.segundaLinhaLabel, s.data, s.responsavel, v.label,
+          '','','','',
+          p.numero, p.tocado?'Sim':'Nao',
+          p.microEntupido?'Sim':'Nao', p.microEntupido?tipoLabel(ENTUP_LABELS,p.causaEntupimento):'', p.microEntupido&&p.causaEntupimento==='outros'?p.causaEntupimentoDetalhe:'',
+          p.microDefeito?'Sim':'Nao', p.microDefeito?p.tipoProblemaDefeito:'',
+          p.corte?'Sim':'Nao', p.corte?tipoLabel(CORTE_COCO_LABELS,p.causaCorte):'', p.corte&&p.causaCorte==='outras'?p.causaCorteDetalhe:'',
+          p.vazamentoMicrotubo?'Sim':'Nao', p.alturaEstacaInadequada?'Sim':'Nao', p.anguloEstacaInadequada?'Sim':'Nao', p.distanciaInadequada?'Sim':'Nao',
+          p.fotos.length, p.obs, s.obsGeral, s.obsFotos.length
+        ].map(csvEsc).join(';'));
+      });
     });
   });
   const stamp = new Date().toISOString().slice(0,16).replace(/[-T:]/g,'');
@@ -824,15 +848,20 @@ function buildValvulasCacau(lista){
 function buildRowsCoco(lista){
   const rows=[];
   lista.forEach(s=>{
-    s.pontos.forEach(p=>{
-      rows.push({
-        Setor:s.nome, Data:s.data, Responsavel:s.responsavel,
-        Ponto:p.numero, Ponto_Avaliado:p.tocado?'Sim':'Nao',
-        Micro_Entupido:p.microEntupido?'Sim':'Nao', Causa_Entupimento:p.microEntupido?tipoLabel(ENTUP_LABELS,p.causaEntupimento):'', Detalhe_Entupimento:p.microEntupido&&p.causaEntupimento==='outros'?p.causaEntupimentoDetalhe:'',
-        Micro_Defeito:p.microDefeito?'Sim':'Nao', Tipo_Problema_Defeito:p.microDefeito?p.tipoProblemaDefeito:'',
-        Mangueira_Cortada:p.corte?'Sim':'Nao', Causa_Corte:p.corte?tipoLabel(CORTE_COCO_LABELS,p.causaCorte):'', Detalhe_Corte:p.corte&&p.causaCorte==='outras'?p.causaCorteDetalhe:'',
-        Estaca_Inadequada:p.estacaInadequada?'Sim':'Nao', Distancia_Inadequada:p.distanciaInadequada?'Sim':'Nao',
-        Qtd_Fotos_Ponto:p.fotos.length, Obs_Ponto:p.obs, Obs_Geral_Setor:s.obsGeral, Qtd_Fotos_ObsGeral:s.obsFotos.length
+    s.valvulas.forEach(v=>{
+      v.pontos.forEach(p=>{
+        rows.push({
+          Setor:s.nome, Data:s.data, Responsavel:s.responsavel, Valvula:v.label,
+          Ponto:p.numero, Ponto_Avaliado:p.tocado?'Sim':'Nao',
+          Micro_Entupido:p.microEntupido?'Sim':'Nao', Causa_Entupimento:p.microEntupido?tipoLabel(ENTUP_LABELS,p.causaEntupimento):'', Detalhe_Entupimento:p.microEntupido&&p.causaEntupimento==='outros'?p.causaEntupimentoDetalhe:'',
+          Micro_Defeito:p.microDefeito?'Sim':'Nao', Tipo_Problema_Defeito:p.microDefeito?p.tipoProblemaDefeito:'',
+          Mangueira_Cortada:p.corte?'Sim':'Nao', Causa_Corte:p.corte?tipoLabel(CORTE_COCO_LABELS,p.causaCorte):'', Detalhe_Corte:p.corte&&p.causaCorte==='outras'?p.causaCorteDetalhe:'',
+          Vazamento_Microtubo:p.vazamentoMicrotubo?'Sim':'Nao',
+          Altura_Estaca_Inadequada:p.alturaEstacaInadequada?'Sim':'Nao',
+          Angulo_Estaca_Inadequada:p.anguloEstacaInadequada?'Sim':'Nao',
+          Distancia_Inadequada:p.distanciaInadequada?'Sim':'Nao',
+          Qtd_Fotos_Ponto:p.fotos.length, Obs_Ponto:p.obs, Obs_Geral_Setor:s.obsGeral, Qtd_Fotos_ObsGeral:s.obsFotos.length
+        });
       });
     });
   });
@@ -1621,7 +1650,7 @@ function renderSetorCoco(){
       ${setor.valvulas.map((vv,i)=>`<div class="tab ${i===state.valvIdx?'active':''}" data-idx="${i}">${escHTML(vv.label)}</div>`).join('')}
     </div>
 
-    <div class="section-title">Pressão (início, final e extremidade da mangueira)<div class="rule"></div></div>
+    <div class="section-title">Pressão (início e final)<div class="rule"></div></div>
     <div class="dripline">
       <div class="valve-label-row">
         <span style="font-size:0.7rem;color:var(--ink-soft);font-weight:700;">VÁLVULA</span>
@@ -1633,14 +1662,14 @@ function renderSetorCoco(){
       </div>
     </div>
 
-    <div class="section-title">80 pontos distribuídos na área<div class="rule"></div></div>
+    <div class="section-title">80 pontos da válvula ${escHTML(v.label)}<div class="rule"></div></div>
     <div class="chip-row">
-      <div class="chip ${state.cocoFiltro==='todos'?'active':''}" data-f="todos">Todos (${setor.pontos.length})</div>
-      <div class="chip ${state.cocoFiltro==='pendentes'?'active':''}" data-f="pendentes">Pendentes (${setor.pontos.filter(p=>!p.tocado).length})</div>
-      <div class="chip ${state.cocoFiltro==='problema'?'active':''}" data-f="problema">Com ocorrência (${setor.pontos.filter(p=>p.tocado&&pontoTemProblemaCoco(p)).length})</div>
+      <div class="chip ${state.cocoFiltro==='todos'?'active':''}" data-f="todos">Todos (${v.pontos.length})</div>
+      <div class="chip ${state.cocoFiltro==='pendentes'?'active':''}" data-f="pendentes">Pendentes (${v.pontos.filter(p=>!p.tocado).length})</div>
+      <div class="chip ${state.cocoFiltro==='problema'?'active':''}" data-f="problema">Com ocorrência (${v.pontos.filter(p=>p.tocado&&pontoTemProblemaCoco(p)).length})</div>
     </div>
     <div id="pontosWrapCoco">
-      ${setor.pontos.filter(filtroCocoFn()).map(p=>pontoCardHTMLCoco(p)).join('') || '<div class="empty-state">Nenhum ponto neste filtro.</div>'}
+      ${v.pontos.filter(filtroCocoFn()).map(p=>pontoCardHTMLCoco(p)).join('') || '<div class="empty-state">Nenhum ponto neste filtro.</div>'}
     </div>
 
     <div class="section-title">Observações gerais do setor<div class="rule"></div></div>
@@ -1681,7 +1710,7 @@ function renderSetorCoco(){
   document.getElementById('fObsGeral').addEventListener('input', e=>{ setor.obsGeral = e.target.value; });
   wirePhotoSection(document.getElementById('obsGeralCard'), setor.obsFotos, ()=>render());
 
-  wirePontoEventsCoco(setor);
+  wirePontoEventsCoco(v);
 
   document.getElementById('btnSalvarVoltar').onclick = ()=>{
     if(!setor.nome.trim()){
@@ -1757,8 +1786,18 @@ function pontoCardHTMLCoco(p){
     </div>`:''}
 
     <div class="row-item">
-      <div class="lbl">Estaca — posição/ângulo<span class="sub">${p.estacaInadequada?'Não conforme':'Conforme'}</span></div>
-      <div class="switch ${p.estacaInadequada?'danger-on':''}" data-role="sw-estaca"><div class="knob"></div></div>
+      <div class="lbl">Vazamento no microtubo<span class="sub">${p.vazamentoMicrotubo?'Não conforme':'Conforme'}</span></div>
+      <div class="switch ${p.vazamentoMicrotubo?'danger-on':''}" data-role="sw-vazamento"><div class="knob"></div></div>
+    </div>
+
+    <div class="row-item">
+      <div class="lbl">Altura da estaca<span class="sub">${p.alturaEstacaInadequada?'Não conforme':'Conforme'}</span></div>
+      <div class="switch ${p.alturaEstacaInadequada?'danger-on':''}" data-role="sw-altura"><div class="knob"></div></div>
+    </div>
+
+    <div class="row-item">
+      <div class="lbl">Ângulo da estaca<span class="sub">${p.anguloEstacaInadequada?'Não conforme':'Conforme'}</span></div>
+      <div class="switch ${p.anguloEstacaInadequada?'danger-on':''}" data-role="sw-angulo"><div class="knob"></div></div>
     </div>
 
     <div class="row-item">
@@ -1774,22 +1813,22 @@ function pontoCardHTMLCoco(p){
     ${photoSectionHTML(p.fotos, 'ponto')}
   </div>`;
 }
-function refreshPontoCardCoco(setor, p){
+function refreshPontoCardCoco(v, p){
   const wrap = document.querySelector(`#pontosWrapCoco .ponto-card[data-n="${p.numero}"]`);
   if(!wrap) return;
   const tmp = document.createElement('div');
   tmp.innerHTML = pontoCardHTMLCoco(p);
   wrap.replaceWith(tmp.firstElementChild);
-  wirePontoEventsCoco(setor, p.numero);
+  wirePontoEventsCoco(v, p.numero);
   // atualiza contadores dos chips sem recarregar tudo
   const chips = document.querySelectorAll('.chip-row .chip');
   if(chips.length===3){
-    chips[0].textContent = `Todos (${setor.pontos.length})`;
-    chips[1].textContent = `Pendentes (${setor.pontos.filter(pt=>!pt.tocado).length})`;
-    chips[2].textContent = `Com ocorrência (${setor.pontos.filter(pt=>pt.tocado&&pontoTemProblemaCoco(pt)).length})`;
+    chips[0].textContent = `Todos (${v.pontos.length})`;
+    chips[1].textContent = `Pendentes (${v.pontos.filter(pt=>!pt.tocado).length})`;
+    chips[2].textContent = `Com ocorrência (${v.pontos.filter(pt=>pt.tocado&&pontoTemProblemaCoco(pt)).length})`;
   }
 }
-function wirePontoEventsCoco(setor, onlyN){
+function wirePontoEventsCoco(v, onlyN){
   const cards = onlyN
     ? [document.querySelector(`#pontosWrapCoco .ponto-card[data-n="${onlyN}"]`)]
     : [...document.querySelectorAll('#pontosWrapCoco .ponto-card')];
@@ -1797,15 +1836,17 @@ function wirePontoEventsCoco(setor, onlyN){
   cards.forEach(card=>{
     if(!card) return;
     const n = parseInt(card.dataset.n,10);
-    const p = setor.pontos.find(pt=>pt.numero===n);
+    const p = v.pontos.find(pt=>pt.numero===n);
 
-    card.querySelector('[data-role="sw-entupido"]').onclick = ()=>{ p.microEntupido=!p.microEntupido; p.tocado=true; refreshPontoCardCoco(setor,p); };
-    card.querySelector('[data-role="sw-defeito"]').onclick = ()=>{ p.microDefeito=!p.microDefeito; p.tocado=true; refreshPontoCardCoco(setor,p); };
-    card.querySelector('[data-role="sw-corte"]').onclick = ()=>{ p.corte=!p.corte; p.tocado=true; refreshPontoCardCoco(setor,p); };
-    card.querySelector('[data-role="sw-estaca"]').onclick = ()=>{ p.estacaInadequada=!p.estacaInadequada; p.tocado=true; refreshPontoCardCoco(setor,p); };
+    card.querySelector('[data-role="sw-entupido"]').onclick = ()=>{ p.microEntupido=!p.microEntupido; p.tocado=true; refreshPontoCardCoco(v,p); };
+    card.querySelector('[data-role="sw-defeito"]').onclick = ()=>{ p.microDefeito=!p.microDefeito; p.tocado=true; refreshPontoCardCoco(v,p); };
+    card.querySelector('[data-role="sw-corte"]').onclick = ()=>{ p.corte=!p.corte; p.tocado=true; refreshPontoCardCoco(v,p); };
+    card.querySelector('[data-role="sw-vazamento"]').onclick = ()=>{ p.vazamentoMicrotubo=!p.vazamentoMicrotubo; p.tocado=true; refreshPontoCardCoco(v,p); };
+    card.querySelector('[data-role="sw-altura"]').onclick = ()=>{ p.alturaEstacaInadequada=!p.alturaEstacaInadequada; p.tocado=true; refreshPontoCardCoco(v,p); };
+    card.querySelector('[data-role="sw-angulo"]').onclick = ()=>{ p.anguloEstacaInadequada=!p.anguloEstacaInadequada; p.tocado=true; refreshPontoCardCoco(v,p); };
 
     const ce = card.querySelector('[data-role="causaEntupimento"]');
-    if(ce) ce.addEventListener('change', e=>{ p.causaEntupimento=e.target.value; refreshPontoCardCoco(setor,p); });
+    if(ce) ce.addEventListener('change', e=>{ p.causaEntupimento=e.target.value; refreshPontoCardCoco(v,p); });
     const ced = card.querySelector('[data-role="entupimentoDetalhe"]');
     if(ced) ced.addEventListener('input', e=>{ p.causaEntupimentoDetalhe=e.target.value; });
 
@@ -1813,11 +1854,11 @@ function wirePontoEventsCoco(setor, onlyN){
     if(tpd) tpd.addEventListener('input', e=>{ p.tipoProblemaDefeito=e.target.value; });
 
     const cc = card.querySelector('[data-role="causaCorte"]');
-    if(cc) cc.addEventListener('change', e=>{ p.causaCorte=e.target.value; refreshPontoCardCoco(setor,p); });
+    if(cc) cc.addEventListener('change', e=>{ p.causaCorte=e.target.value; refreshPontoCardCoco(v,p); });
     const ccd = card.querySelector('[data-role="corteDetalhe"]');
     if(ccd) ccd.addEventListener('input', e=>{ p.causaCorteDetalhe=e.target.value; });
 
-    card.querySelector('[data-role="sw-distancia"]').onclick = ()=>{ p.distanciaInadequada=!p.distanciaInadequada; p.tocado=true; refreshPontoCardCoco(setor,p); };
+    card.querySelector('[data-role="sw-distancia"]').onclick = ()=>{ p.distanciaInadequada=!p.distanciaInadequada; p.tocado=true; refreshPontoCardCoco(v,p); };
 
     card.querySelector('[data-role="obs-toggle"]').onclick = ()=>{
       const w = card.querySelector('[data-role="obs-wrap"]');
@@ -1828,7 +1869,7 @@ function wirePontoEventsCoco(setor, onlyN){
       p.obs = e.target.value; p.tocado = p.tocado || e.target.value.trim().length>0;
     });
 
-    wirePhotoSection(card, p.fotos, ()=>{ p.tocado=true; refreshPontoCardCoco(setor,p); });
+    wirePhotoSection(card, p.fotos, ()=>{ p.tocado=true; refreshPontoCardCoco(v,p); });
   });
 }
 
