@@ -169,6 +169,15 @@
   }
   .pf-trio{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
   .nivel-select{border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:0.72rem;background:#fff;}
+  .lagarta-bloco{background:var(--surface-2);border-radius:8px;padding:8px 10px;margin:4px 0 8px;}
+  .estagio-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+  .chip-estagio{
+    display:inline-flex;align-items:center;gap:5px;background:var(--danger-bg);color:var(--danger);
+    border-radius:14px;padding:3px 6px 3px 10px;font-size:0.72rem;font-weight:700;font-family:var(--font-mono);
+  }
+  .chip-estagio button{background:none;border:none;color:var(--danger);font-size:0.75rem;font-weight:800;padding:2px;line-height:1;}
+  .add-estagio-row{display:flex;gap:8px;align-items:center;}
+  .add-estagio-row .btn-secondary{padding:6px 12px;font-size:0.75rem;flex-shrink:0;}
 
   .section-title{
     font-size:0.78rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--forest);
@@ -382,7 +391,7 @@ function agendarAutoSyncSheets(){
 
 
 /* ---------------- STATE ---------------- */
-const APP_VERSION = '3.3';
+const APP_VERSION = '3.4';
 const MODULOS = [
   { id:'irrigacao_cacau', titulo:'Monitoramento de Irrigação', sub:'Cacau', emoji:'💧', canto:'🍫', cor:'#2F4A2C', cultura:'cacau', tipo:'irrigacao' },
   { id:'irrigacao_coco', titulo:'Monitoramento de Irrigação', sub:'Coco', emoji:'💧', canto:'🥥', cor:'#1F5A78', cultura:'coco', tipo:'irrigacao' },
@@ -629,6 +638,18 @@ function migrarSetoresPragas(lista){
       if(v.pragasEstagio) delete v.pragasEstagio;
       if(!Array.isArray(v.pontosPragas) || v.pontosPragas.length===0){
         v.pontosPragas = Array.from({length:20}, (_,i)=>novoPontoPraga(i+1));
+      } else {
+        v.pontosPragas.forEach(p=>{
+          Object.keys(p.presencas||{}).forEach(pid=>{
+            const pr = p.presencas[pid];
+            if(pr && pr.estagio!==undefined && !Array.isArray(pr.estagios)){
+              pr.estagios = [pr.estagio];
+              delete pr.estagio;
+            } else if(pr && !Array.isArray(pr.estagios)){
+              pr.estagios = [];
+            }
+          });
+        });
       }
       ['linha1','linha66'].forEach(grp=>{
         ['vazaoInicial','vazaoFinal'].forEach(campo=>{
@@ -813,12 +834,15 @@ function exportCSVPragas(lista){
           ativas.forEach(pt=>{
             const pr = p.presencas[pt.id];
             const isLagarta = pt.tipo==='lagarta';
-            rows.push([
-              s.nome, s.data, s.responsavel, v.label, p.numero, 'Sim', pt.nome,
-              NIVEL_LABELS[pr.nivel]||pr.nivel,
-              isLagarta?ESTAGIO_LABELS[pr.estagio||0]:'',
-              p.fotos.length, p.obs
-            ].map(csvEsc).join(';'));
+            const estagios = isLagarta ? (pr.estagios&&pr.estagios.length ? pr.estagios : [null]) : [null];
+            estagios.forEach(est=>{
+              rows.push([
+                s.nome, s.data, s.responsavel, v.label, p.numero, 'Sim', pt.nome,
+                NIVEL_LABELS[pr.nivel]||pr.nivel,
+                est!==null?ESTAGIO_LABELS[est]:'',
+                p.fotos.length, p.obs
+              ].map(csvEsc).join(';'));
+            });
           });
         }
       });
@@ -908,11 +932,14 @@ function buildRowsPragas(lista){
           ativas.forEach(pt=>{
             const pr = p.presencas[pt.id];
             const isLagarta = pt.tipo==='lagarta';
-            rows.push({
-              Setor:s.nome, Data:s.data, Responsavel:s.responsavel, Valvula:v.label, Ponto:p.numero, Ponto_Avaliado:'Sim', Praga:pt.nome,
-              Nivel: NIVEL_LABELS[pr.nivel]||pr.nivel,
-              Estagio_Lagarta: isLagarta?ESTAGIO_LABELS[pr.estagio||0]:'',
-              Qtd_Fotos:p.fotos.length, Obs_Ponto:p.obs
+            const estagios = isLagarta ? (pr.estagios&&pr.estagios.length ? pr.estagios : [null]) : [null];
+            estagios.forEach(est=>{
+              rows.push({
+                Setor:s.nome, Data:s.data, Responsavel:s.responsavel, Valvula:v.label, Ponto:p.numero, Ponto_Avaliado:'Sim', Praga:pt.nome,
+                Nivel: NIVEL_LABELS[pr.nivel]||pr.nivel,
+                Estagio_Lagarta: est!==null?ESTAGIO_LABELS[est]:'',
+                Qtd_Fotos:p.fotos.length, Obs_Ponto:p.obs
+              });
             });
           });
         }
@@ -1406,24 +1433,40 @@ function pontoCardHTMLPraga(p){
   const status = pontoStatusPraga(p);
   const linhas = state.pragasTipos.map(pt=>{
     const isLagarta = pt.tipo==='lagarta';
-    const pr = p.presencas[pt.id] || {ativo:false, nivel:'baixo', estagio:0};
-    const campos = !pr.ativo ? '' : `
+    const pr = p.presencas[pt.id] || {ativo:false, nivel:'baixo', estagios:[]};
+    const nivelSelectHTML = `
       <select class="nivel-select" data-role="nivel" data-pid="${pt.id}">
         <option value="baixo" ${pr.nivel==='baixo'?'selected':''}>Baixo</option>
         <option value="medio" ${pr.nivel==='medio'?'selected':''}>Médio</option>
         <option value="alto" ${pr.nivel==='alto'?'selected':''}>Alto</option>
-      </select>
-      ${isLagarta?`<select class="nivel-select" data-role="estagio" data-pid="${pt.id}">
-        ${[0,1,2,3,4,5].map(n=>`<option value="${n}" ${(pr.estagio||0)===n?'selected':''}>${n===0?'0-Neonata':n===5?'5-Adulta':n}</option>`).join('')}
-      </select>`:''}`;
-    return `
+      </select>`;
+    const linhaPrincipal = `
     <div class="row-item">
-      <div class="lbl">${escHTML(pt.nome)}${isLagarta&&pr.ativo?'<span class="sub">Estágio: 0=neonata … 5=adulta</span>':''}</div>
+      <div class="lbl">${escHTML(pt.nome)}</div>
       <div class="chk-qty">
-        ${campos}
+        ${pr.ativo && !isLagarta ? nivelSelectHTML : ''}
         <div class="switch ${pr.ativo?'danger-on':''}" data-role="sw-praga" data-pid="${pt.id}"><div class="knob"></div></div>
       </div>
     </div>`;
+    const estagios = pr.estagios || [];
+    const blocoLagarta = (isLagarta && pr.ativo) ? `
+    <div class="lagarta-bloco" data-pid="${pt.id}">
+      <div class="row-item" style="border-top:none;padding-top:2px;">
+        <div class="lbl">Nível geral</div>
+        <div class="chk-qty">${nivelSelectHTML}</div>
+      </div>
+      <div class="sub" style="display:block;margin:2px 0 6px;">Estágios encontrados neste ponto (pode ter mais de um)</div>
+      <div class="estagio-chips">
+        ${estagios.length ? estagios.map(n=>`<span class="chip-estagio">${n===0?'0-Neonata':n===5?'5-Adulta':n}<button type="button" data-role="rm-estagio" data-pid="${pt.id}" data-valor="${n}">✕</button></span>`).join('') : '<span class="sub" style="display:inline;">Nenhum estágio adicionado ainda</span>'}
+      </div>
+      <div class="add-estagio-row">
+        <select class="nivel-select" data-role="novo-estagio-select" data-pid="${pt.id}">
+          ${[0,1,2,3,4,5].map(n=>`<option value="${n}">${n===0?'0-Neonata':n===5?'5-Adulta':n}</option>`).join('')}
+        </select>
+        <button type="button" class="btn-secondary" data-role="add-estagio" data-pid="${pt.id}">+ Adicionar estágio</button>
+      </div>
+    </div>` : '';
+    return linhaPrincipal + blocoLagarta;
   }).join('');
   return `
   <div class="ponto-card ${p.tocado?'touched':''} ${status!=='pending'?status:''}" data-n="${p.numero}">
@@ -1466,29 +1509,44 @@ function wirePontoEventsPraga(v, onlyN){
     card.querySelectorAll('[data-role="sw-praga"]').forEach(sw=>{
       sw.onclick = ()=>{
         const pid = sw.dataset.pid;
-        const cur = p.presencas[pid] || {ativo:false, nivel:'baixo', estagio:0};
-        p.presencas[pid] = { ativo: !cur.ativo, nivel: cur.nivel||'baixo', estagio: cur.estagio||0 };
+        const cur = p.presencas[pid] || {ativo:false, nivel:'baixo', estagios:[]};
+        p.presencas[pid] = { ativo: !cur.ativo, nivel: cur.nivel||'baixo', estagios: cur.estagios||[] };
         p.tocado = true;
+        refreshPontoCardPraga(v,p);
+      };
+    });
+    card.querySelectorAll('[data-role="add-estagio"]').forEach(btn=>{
+      btn.onclick = ()=>{
+        const pid = btn.dataset.pid;
+        const sel = card.querySelector(`[data-role="novo-estagio-select"][data-pid="${pid}"]`);
+        const valor = parseInt(sel.value,10);
+        const cur = p.presencas[pid] || {ativo:true, nivel:'baixo', estagios:[]};
+        if(!cur.estagios) cur.estagios = [];
+        if(cur.estagios.indexOf(valor)===-1) cur.estagios.push(valor);
+        p.presencas[pid] = cur;
+        p.tocado = true;
+        refreshPontoCardPraga(v,p);
+      };
+    });
+    card.querySelectorAll('[data-role="rm-estagio"]').forEach(btn=>{
+      btn.onclick = ()=>{
+        const pid = btn.dataset.pid;
+        const valor = parseInt(btn.dataset.valor,10);
+        const cur = p.presencas[pid];
+        if(cur && Array.isArray(cur.estagios)){
+          cur.estagios = cur.estagios.filter(n=>n!==valor);
+        }
         refreshPontoCardPraga(v,p);
       };
     });
     card.querySelectorAll('[data-role="nivel"]').forEach(sel=>{
       sel.addEventListener('change', e=>{
         const pid = sel.dataset.pid;
-        const cur = p.presencas[pid] || {ativo:true, nivel:'baixo', estagio:0};
+        const cur = p.presencas[pid] || {ativo:true, nivel:'baixo', estagios:[]};
         cur.nivel = e.target.value;
         p.presencas[pid] = cur;
       });
     });
-    card.querySelectorAll('[data-role="estagio"]').forEach(sel=>{
-      sel.addEventListener('change', e=>{
-        const pid = sel.dataset.pid;
-        const cur = p.presencas[pid] || {ativo:true, nivel:'baixo', estagio:0};
-        cur.estagio = parseInt(e.target.value,10);
-        p.presencas[pid] = cur;
-      });
-    });
-
     card.querySelector('[data-role="obs-toggle"]').onclick = ()=>{
       const w = card.querySelector('[data-role="obs-wrap"]');
       w.style.display = w.style.display==='none' ? 'block' : 'none';
