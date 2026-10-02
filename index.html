@@ -358,7 +358,7 @@ async function excluirSetorFirestore(id){
 }
 async function salvarConfigFirestore(){
   try{
-    await setDoc(doc(db,'config','app'), { pragasTipos: state.pragasTipos, webAppUrl: state.webAppUrl });
+    await setDoc(doc(db,'config','app'), { pragasTipos: state.pragasTipos, webAppUrl: state.webAppUrl, senhaExclusao: state.senhaExclusao||'' });
   }catch(e){ console.error('Falha ao salvar config no Firestore:', e); }
 }
 
@@ -382,7 +382,7 @@ function agendarAutoSyncSheets(){
 
 
 /* ---------------- STATE ---------------- */
-const APP_VERSION = '3.2';
+const APP_VERSION = '3.3';
 const MODULOS = [
   { id:'irrigacao_cacau', titulo:'Monitoramento de Irrigação', sub:'Cacau', emoji:'💧', canto:'🍫', cor:'#2F4A2C', cultura:'cacau', tipo:'irrigacao' },
   { id:'irrigacao_coco', titulo:'Monitoramento de Irrigação', sub:'Coco', emoji:'💧', canto:'🥥', cor:'#1F5A78', cultura:'coco', tipo:'irrigacao' },
@@ -393,6 +393,7 @@ function getModulo(id){ return MODULOS.find(m=>m.id===id); }
 let state = {
   view:'home', modulo:null, setorId:null, valvIdx:0, setores:[], cocoFiltro:'todos',
   webAppUrl:'https://script.google.com/macros/s/AKfycby2fY9XUmx0jv0MLQwJoFuefXs2UfjO7zYonZKmdPUhAuqHemnlSGTB9jOAtbjVFJI/exec',
+  senhaExclusao:'',
   showPragasManager:false, historicoSetorId:null, historicoTipo:null,
   pragasTipos: [
     {id:'p01', nome:'Lagarta (Lepidópteros Spp.)', tipo:'lagarta'},
@@ -980,6 +981,27 @@ function configurarWebAppUrl(){
     showToast(state.webAppUrl ? 'URL salva' : 'URL removida');
   }
 }
+function configurarSenhaExclusao(){
+  const temSenha = !!state.senhaExclusao;
+  if(temSenha){
+    const atual = prompt('Digite a senha atual para alterá-la:');
+    if(atual===null) return;
+    if(atual !== state.senhaExclusao){ showToast('Senha incorreta'); return; }
+  }
+  const nova = prompt('Crie a nova senha para excluir setores (deixe em branco para remover a proteção):', '');
+  if(nova===null) return;
+  state.senhaExclusao = nova.trim();
+  agendarSalvarConfig();
+  showToast(state.senhaExclusao ? 'Senha de exclusão definida' : 'Proteção por senha removida');
+}
+function confirmarSenhaExclusao(){
+  if(!state.senhaExclusao) return true;
+  const digitada = prompt('Digite a senha para excluir este setor:');
+  if(digitada===null) return false;
+  if(digitada===state.senhaExclusao) return true;
+  alert('Senha incorreta — exclusão cancelada.');
+  return false;
+}
 async function testarWebAppUrl(){
   if(!state.webAppUrl){ showToast('Configure a URL do Google Sheets primeiro'); return; }
   showToast('Testando link…');
@@ -1056,6 +1078,7 @@ function renderHome(){
     <div style="font-size:0.72rem;color:var(--ink-soft);text-align:center;margin:-6px 0 14px;">☁️ Salvo automaticamente — sincroniza sozinho com o Google Sheets</div>
     <div class="toolbar" style="margin-top:6px;">
       <button class="btn-ghost" id="btnExpCSV">📊 Exportar planilha (.csv)</button>
+      <button class="btn-ghost" id="btnSenhaExclusao">🔒 Senha de exclusão</button>
       <button class="btn-ghost" id="btnConfigSheets">🔗 Configurar Google Sheets</button>
       <button class="btn-ghost" id="btnTestarSheets">🧪 Testar link do Sheets</button>
       <button class="btn-ghost" id="btnEnviarSheets" style="border-color:var(--forest);color:var(--forest);">☁️ Sincronizar agora</button>
@@ -1066,6 +1089,7 @@ function renderHome(){
     t.onclick = ()=>{ state.modulo = t.dataset.mod; state.view='modulo-list'; render(); };
   });
   document.getElementById('btnExpCSV').onclick = exportCSV;
+  document.getElementById('btnSenhaExclusao').onclick = configurarSenhaExclusao;
   document.getElementById('btnConfigSheets').onclick = configurarWebAppUrl;
   document.getElementById('btnTestarSheets').onclick = testarWebAppUrl;
   document.getElementById('btnEnviarSheets').onclick = ()=>sendToSheets();
@@ -1143,6 +1167,7 @@ function renderModuloList(){
     row.querySelector('.btn-open').onclick = ()=>{ state.setorId=id; state.valvIdx=0; state.view='setor'; render(); };
     row.querySelector('.btn-hist').onclick = ()=>{ state.historicoSetorId=id; state.historicoTipo=m.tipo; state.view='historico'; render(); };
     row.querySelector('.btn-del').onclick = ()=>{
+      if(!confirmarSenhaExclusao()) return;
       if(confirm('Excluir este setor e todos os dados aferidos nele?')){
         state.setores = state.setores.filter(s=>s.id!==id);
         excluirSetorFirestore(id);
@@ -1980,6 +2005,7 @@ try{
   state.setores = setores;
   if(config){
     if(config.webAppUrl) state.webAppUrl = config.webAppUrl;
+    if(config.senhaExclusao!==undefined) state.senhaExclusao = config.senhaExclusao;
     if(Array.isArray(config.pragasTipos) && config.pragasTipos.length) state.pragasTipos = config.pragasTipos;
   }
   migrarSetoresPragas(state.setores);
