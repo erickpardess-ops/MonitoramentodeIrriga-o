@@ -382,7 +382,7 @@ function agendarAutoSyncSheets(){
 
 
 /* ---------------- STATE ---------------- */
-const APP_VERSION = '3.1';
+const APP_VERSION = '3.2';
 const MODULOS = [
   { id:'irrigacao_cacau', titulo:'Monitoramento de Irrigação', sub:'Cacau', emoji:'💧', canto:'🍫', cor:'#2F4A2C', cultura:'cacau', tipo:'irrigacao' },
   { id:'irrigacao_coco', titulo:'Monitoramento de Irrigação', sub:'Coco', emoji:'💧', canto:'🥥', cor:'#1F5A78', cultura:'coco', tipo:'irrigacao' },
@@ -438,6 +438,9 @@ function novoPonto(numero){
 }
 function novaVazaoMedicao(){ return { volumeMl:'', minutos:'' }; }
 function novaLinha(){ return { pressaoInicial:'', pressaoFinal:'', vazaoInicial: novaVazaoMedicao(), vazaoFinal: novaVazaoMedicao() }; }
+function novoPontoPraga(numero){
+  return { numero, presencas:{}, obs:'', fotos:[], tocado:false };
+}
 function novaValvula(label){
   return {
     label,
@@ -445,7 +448,7 @@ function novaValvula(label){
     linha66: novaLinha(),
     pontos: Array.from({length:10}, (_,i)=>novoPonto(i+1)),
     obsGeral: '', obsFotos: [],
-    pragasContagem: {}, pragasEstagio: {}
+    pontosPragas: Array.from({length:20}, (_,i)=>novoPontoPraga(i+1))
   };
 }
 function novoSetor(nome){
@@ -538,30 +541,30 @@ function pontoStatus(p){
   if(!p.tocado) return 'pending';
   return pontoTemProblema(p) ? 'danger' : 'ok';
 }
-function valvulaTemDados(v){ return Object.values(v.pragasContagem||{}).some(n=>parseFloat(n)>0); }
+function pontoTemProblemaPraga(p){ return Object.values(p.presencas||{}).some(x=>x && x.ativo); }
+function pontoStatusPraga(p){
+  if(!p.tocado) return 'pending';
+  return pontoTemProblemaPraga(p) ? 'danger' : 'ok';
+}
 function resumoPragasValvula(v){
-  let totalOcorrencias=0, tiposAtivos=0;
-  state.pragasTipos.forEach(pt=>{
-    const n = parseFloat((v.pragasContagem||{})[pt.id]) || 0;
-    if(n>0){ totalOcorrencias+=n; tiposAtivos++; }
-  });
-  return {totalOcorrencias, tiposAtivos, valvulaComDados: valvulaTemDados(v)};
+  let avaliadas=0, comOcorrencia=0;
+  (v.pontosPragas||[]).forEach(p=>{ if(p.tocado){ avaliadas++; if(pontoTemProblemaPraga(p)) comOcorrencia++; } });
+  return {avaliadas, comOcorrencia, total:(v.pontosPragas||[]).length};
 }
 function resumoPragasSetor(setor){
-  let totalOcorrencias=0, tiposAtivos=0, valvulasComDados=0;
+  let avaliadas=0, comOcorrencia=0, total=0;
   (setor.valvulas||[]).forEach(v=>{
     const r = resumoPragasValvula(v);
-    totalOcorrencias+=r.totalOcorrencias; tiposAtivos+=r.tiposAtivos;
-    if(r.valvulaComDados) valvulasComDados++;
+    avaliadas+=r.avaliadas; comOcorrencia+=r.comOcorrencia; total+=r.total;
   });
-  return {totalOcorrencias, tiposAtivos, valvulasComDados, avaliados:valvulasComDados, problemas:totalOcorrencias, total:(setor.valvulas||[]).length};
+  return {avaliadas, comOcorrencia, total, avaliados:avaliadas, problemas:comOcorrencia};
 }
 function registrarHistorico(setor, tipo){
   if(!Array.isArray(setor.historico)) setor.historico = [];
   let entrada;
   if(tipo==='pragas'){
     const r = resumoPragasSetor(setor);
-    entrada = { data:setor.data, modulo:'pragas', avaliados:r.valvulasComDados, problemas:r.totalOcorrencias, total:r.total };
+    entrada = { data:setor.data, modulo:'pragas', avaliados:r.avaliadas, problemas:r.comOcorrencia, total:r.total };
   } else {
     const r = resumoSetor(setor);
     entrada = { data:setor.data, modulo:'irrigacao', avaliados:r.avaliados, problemas:r.problemas, total:r.total };
@@ -621,9 +624,11 @@ function migrarSetoresPragas(lista){
       return;
     }
     (s.valvulas||[]).forEach(v=>{
-      if(v.pragas) delete v.pragas; // formato antigo (por planta) descontinuado
-      if(!v.pragasContagem || typeof v.pragasContagem!=='object') v.pragasContagem = {};
-      if(!v.pragasEstagio || typeof v.pragasEstagio!=='object') v.pragasEstagio = {};
+      if(v.pragasContagem) delete v.pragasContagem; // formato antigo (contagem por válvula) descontinuado
+      if(v.pragasEstagio) delete v.pragasEstagio;
+      if(!Array.isArray(v.pontosPragas) || v.pontosPragas.length===0){
+        v.pontosPragas = Array.from({length:20}, (_,i)=>novoPontoPraga(i+1));
+      }
       ['linha1','linha66'].forEach(grp=>{
         ['vazaoInicial','vazaoFinal'].forEach(campo=>{
           const atual = v[grp] && v[grp][campo];
@@ -719,7 +724,7 @@ const CORTE_LABELS = {objeto_cortante:'Objeto cortante', outros:'Outros'};
 const FURO_LABELS = {roseta:'Roseta', objeto_pontiagudo:'Objeto pontiagudo', roedores:'Roedores', outro:'Outros'};
 const ENTUP_LABELS = {particulas:'Partículas', materia_organica:'Matéria orgânica', precipitados:'Precipitados', outros:'Outros materiais'};
 const CORTE_COCO_LABELS = {objeto_cortante:'Objeto cortante', objeto_pontiagudo:'Objeto pontiagudo', outras:'Outras causas'};
-const NIVEL_LABELS = {baixa:'Baixa', media:'Média', alta:'Alta'};
+const NIVEL_LABELS = {baixo:'Baixo', medio:'Médio', alto:'Alto'};
 const ESTAGIO_LABELS = {0:'0 - Neonata', 1:'1', 2:'2', 3:'3', 4:'4', 5:'5 - Adulta'};
 
 function exportCSVCacau(lista){
@@ -794,18 +799,27 @@ function exportCSV(){
   showToast('Planilha(s) CSV exportada(s) (fotos não incluídas — use o backup JSON)');
 }
 function exportCSVPragas(lista){
-  const cols = ['Setor','Data','Responsavel','Valvula','Praga','Quantidade','Estagio_Lagarta'];
+  const cols = ['Setor','Data','Responsavel','Valvula','Ponto','Ponto_Avaliado','Praga','Nivel','Estagio_Lagarta','Qtd_Fotos','Obs_Ponto'];
   const rows=[cols.join(';')];
   lista.forEach(s=>{
     s.valvulas.forEach(v=>{
-      state.pragasTipos.forEach(pt=>{
-        const qtd = (v.pragasContagem||{})[pt.id];
-        if(qtd===undefined || qtd==='') return;
-        const isLagarta = pt.tipo==='lagarta';
-        rows.push([
-          s.nome, s.data, s.responsavel, v.label, pt.nome, qtd,
-          isLagarta?ESTAGIO_LABELS[parseInt((v.pragasEstagio||{})[pt.id],10)||0]:''
-        ].map(csvEsc).join(';'));
+      (v.pontosPragas||[]).forEach(p=>{
+        if(!p.tocado) return;
+        const ativas = state.pragasTipos.filter(pt=>p.presencas[pt.id] && p.presencas[pt.id].ativo);
+        if(ativas.length===0){
+          rows.push([s.nome, s.data, s.responsavel, v.label, p.numero, 'Sim', '(nenhuma)', '', '', p.fotos.length, p.obs].map(csvEsc).join(';'));
+        } else {
+          ativas.forEach(pt=>{
+            const pr = p.presencas[pt.id];
+            const isLagarta = pt.tipo==='lagarta';
+            rows.push([
+              s.nome, s.data, s.responsavel, v.label, p.numero, 'Sim', pt.nome,
+              NIVEL_LABELS[pr.nivel]||pr.nivel,
+              isLagarta?ESTAGIO_LABELS[pr.estagio||0]:'',
+              p.fotos.length, p.obs
+            ].map(csvEsc).join(';'));
+          });
+        }
       });
     });
   });
@@ -884,14 +898,23 @@ function buildRowsPragas(lista){
   const rows=[];
   lista.forEach(s=>{
     s.valvulas.forEach(v=>{
-      state.pragasTipos.forEach(pt=>{
-        const qtd = (v.pragasContagem||{})[pt.id];
-        if(qtd===undefined || qtd==='') return;
-        const isLagarta = pt.tipo==='lagarta';
-        rows.push({
-          Setor:s.nome, Data:s.data, Responsavel:s.responsavel, Valvula:v.label, Praga:pt.nome, Quantidade:qtd,
-          Estagio_Lagarta: isLagarta?ESTAGIO_LABELS[parseInt((v.pragasEstagio||{})[pt.id],10)||0]:''
-        });
+      (v.pontosPragas||[]).forEach(p=>{
+        if(!p.tocado) return;
+        const ativas = state.pragasTipos.filter(pt=>p.presencas[pt.id] && p.presencas[pt.id].ativo);
+        if(ativas.length===0){
+          rows.push({ Setor:s.nome, Data:s.data, Responsavel:s.responsavel, Valvula:v.label, Ponto:p.numero, Ponto_Avaliado:'Sim', Praga:'(nenhuma)', Nivel:'', Estagio_Lagarta:'', Qtd_Fotos:p.fotos.length, Obs_Ponto:p.obs });
+        } else {
+          ativas.forEach(pt=>{
+            const pr = p.presencas[pt.id];
+            const isLagarta = pt.tipo==='lagarta';
+            rows.push({
+              Setor:s.nome, Data:s.data, Responsavel:s.responsavel, Valvula:v.label, Ponto:p.numero, Ponto_Avaliado:'Sim', Praga:pt.nome,
+              Nivel: NIVEL_LABELS[pr.nivel]||pr.nivel,
+              Estagio_Lagarta: isLagarta?ESTAGIO_LABELS[pr.estagio||0]:'',
+              Qtd_Fotos:p.fotos.length, Obs_Ponto:p.obs
+            });
+          });
+        }
       });
     });
   });
@@ -1321,12 +1344,12 @@ function renderAbaIrrigacaoHTML(v, dupla){
 function renderAbaPragasHTML(v){
   const r = resumoPragasValvula(v);
   return `
-    <div class="section-title">Monitoramento de pragas — contagem nas 20 plantas da válvula<div class="rule"></div></div>
-    <div style="font-size:0.75rem;color:var(--ink-soft);margin:-4px 0 12px;">${r.totalOcorrencias} ocorrência(s) registrada(s) · ${r.tiposAtivos} tipo(s) de praga presente(s) nesta válvula</div>
+    <div class="section-title">Monitoramento de pragas — 20 pontos da válvula<div class="rule"></div></div>
+    <div style="font-size:0.75rem;color:var(--ink-soft);margin:-4px 0 12px;">${r.avaliadas}/${r.total} pontos avaliados nesta válvula · ${r.comOcorrencia} com ocorrência</div>
     <button type="button" class="btn-ghost" id="btnTogglePragasManager" style="margin-bottom:12px;">⚙️ Gerenciar tipos de praga (${state.pragasTipos.length})</button>
     ${state.showPragasManager ? pragasManagerHTML() : ''}
-    <div class="card" id="pragasWrap">
-      ${state.pragasTipos.length ? state.pragasTipos.map(pt=>pragaRowHTML(v, pt)).join('') : '<div style="font-size:0.85rem;color:var(--ink-soft);">Nenhum tipo de praga cadastrado — toque em "Gerenciar tipos de praga" acima.</div>'}
+    <div id="pontosWrapPraga">
+      ${(v.pontosPragas||[]).map(p=>pontoCardHTMLPraga(p)).join('')}
     </div>
   `;
 }
@@ -1339,8 +1362,8 @@ function pragasManagerHTML(){
       <div class="row-item" data-pid="${pt.id}">
         <input type="text" class="tipo-detalhe" style="margin:0;flex:1;" data-role="praga-nome" value="${escAttr(pt.nome)}">
         <select class="nivel-select" data-role="praga-tipocampo" style="flex-shrink:0;">
-          <option value="padrao" ${pt.tipo!=='lagarta'?'selected':''}>Padrão (só quantidade)</option>
-          <option value="lagarta" ${pt.tipo==='lagarta'?'selected':''}>Lagarta (qtd + estágio)</option>
+          <option value="padrao" ${pt.tipo!=='lagarta'?'selected':''}>Padrão</option>
+          <option value="lagarta" ${pt.tipo==='lagarta'?'selected':''}>Lagarta (+ estágio)</option>
         </select>
         <button type="button" class="btn-danger-outline" data-role="praga-rm" style="padding:5px 10px;font-size:0.7rem;flex-shrink:0;">Remover</button>
       </div>`).join('') || '<div style="font-size:0.8rem;color:var(--ink-soft);">Nenhum tipo cadastrado ainda.</div>'}
@@ -1348,50 +1371,110 @@ function pragasManagerHTML(){
     <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
       <input type="text" id="novaPragaInput" placeholder="Nova praga/doença..." style="flex:1;min-width:140px;border:1.5px solid var(--line);border-radius:8px;padding:8px 10px;font-size:0.85rem;">
       <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--ink-soft);font-weight:600;">
-        <input type="checkbox" id="novaPragaLagarta" style="width:16px;height:16px;"> é lagarta (qtd+estágio)
+        <input type="checkbox" id="novaPragaLagarta" style="width:16px;height:16px;"> é lagarta (+ estágio)
       </label>
       <button type="button" class="btn-secondary" id="btnAddPraga">+ Adicionar</button>
     </div>
   </div>`;
 }
-function pragaRowHTML(v, pt){
-  const isLagarta = pt.tipo==='lagarta';
-  const qtd = (v.pragasContagem||{})[pt.id];
-  const estagio = (v.pragasEstagio||{})[pt.id];
-  return `
-  <div class="row-item">
-    <div class="lbl">${escHTML(pt.nome)}${isLagarta?'<span class="sub">Estágio predominante: 0=neonata … 5=adulta</span>':''}</div>
-    <div class="chk-qty">
+function pontoCardHTMLPraga(p){
+  const status = pontoStatusPraga(p);
+  const linhas = state.pragasTipos.map(pt=>{
+    const isLagarta = pt.tipo==='lagarta';
+    const pr = p.presencas[pt.id] || {ativo:false, nivel:'baixo', estagio:0};
+    const campos = !pr.ativo ? '' : `
+      <select class="nivel-select" data-role="nivel" data-pid="${pt.id}">
+        <option value="baixo" ${pr.nivel==='baixo'?'selected':''}>Baixo</option>
+        <option value="medio" ${pr.nivel==='medio'?'selected':''}>Médio</option>
+        <option value="alto" ${pr.nivel==='alto'?'selected':''}>Alto</option>
+      </select>
       ${isLagarta?`<select class="nivel-select" data-role="estagio" data-pid="${pt.id}">
-        ${[0,1,2,3,4,5].map(n=>`<option value="${n}" ${(estagio!==undefined&&estagio!==''?parseInt(estagio,10):0)===n?'selected':''}>${n===0?'0-Neonata':n===5?'5-Adulta':n}</option>`).join('')}
-      </select>`:''}
-      <input type="number" class="qty-input" min="0" data-role="qtd-valvula" data-pid="${pt.id}" value="${escAttr(qtd)}" placeholder="0" title="Quantidade encontrada nesta válvula">
+        ${[0,1,2,3,4,5].map(n=>`<option value="${n}" ${(pr.estagio||0)===n?'selected':''}>${n===0?'0-Neonata':n===5?'5-Adulta':n}</option>`).join('')}
+      </select>`:''}`;
+    return `
+    <div class="row-item">
+      <div class="lbl">${escHTML(pt.nome)}${isLagarta&&pr.ativo?'<span class="sub">Estágio: 0=neonata … 5=adulta</span>':''}</div>
+      <div class="chk-qty">
+        ${campos}
+        <div class="switch ${pr.ativo?'danger-on':''}" data-role="sw-praga" data-pid="${pt.id}"><div class="knob"></div></div>
+      </div>
+    </div>`;
+  }).join('');
+  return `
+  <div class="ponto-card ${p.tocado?'touched':''} ${status!=='pending'?status:''}" data-n="${p.numero}">
+    <div class="ponto-head">
+      <div class="n">Ponto ${p.numero}</div>
+      <div class="status">${status==='pending'?'Pendente':status==='ok'?'Sem ocorrência':'Com ocorrência'}</div>
     </div>
+    ${linhas || '<div style="font-size:0.8rem;color:var(--ink-soft);">Nenhum tipo de praga cadastrado — toque em "Gerenciar tipos de praga" acima.</div>'}
+    <button type="button" class="obs-toggle" data-role="obs-toggle">${p.obs? '✎ editar observação' : '+ observação (opcional)'}</button>
+    <div class="ponto-obs" data-role="obs-wrap" style="display:${p.obs?'block':'none'}">
+      <textarea data-role="obs-text" placeholder="Detalhe o que foi observado neste ponto...">${escHTML(p.obs)}</textarea>
+    </div>
+    ${photoSectionHTML(p.fotos, 'ponto')}
   </div>`;
 }
-function wirePontoEventsPraga(v){
-  const wrap = document.getElementById('pragasWrap');
+function refreshPontoCardPraga(v, p){
+  const wrap = document.querySelector(`#pontosWrapPraga .ponto-card[data-n="${p.numero}"]`);
   if(!wrap) return;
-  wrap.querySelectorAll('[data-role="qtd-valvula"]').forEach(inp=>{
-    inp.addEventListener('input', e=>{
-      const pid = inp.dataset.pid;
-      if(!v.pragasContagem) v.pragasContagem = {};
-      v.pragasContagem[pid] = e.target.value;
-      refreshPragasResumo(v);
-    });
-  });
-  wrap.querySelectorAll('[data-role="estagio"]').forEach(sel=>{
-    sel.addEventListener('change', e=>{
-      const pid = sel.dataset.pid;
-      if(!v.pragasEstagio) v.pragasEstagio = {};
-      v.pragasEstagio[pid] = e.target.value;
-    });
-  });
+  const tmp = document.createElement('div');
+  tmp.innerHTML = pontoCardHTMLPraga(p);
+  wrap.replaceWith(tmp.firstElementChild);
+  wirePontoEventsPraga(v, p.numero);
+  const resumoEl = document.querySelector('.section-title + div[style*="margin:-4px"]');
+  if(resumoEl){
+    const r = resumoPragasValvula(v);
+    resumoEl.textContent = `${r.avaliadas}/${r.total} pontos avaliados nesta válvula · ${r.comOcorrencia} com ocorrência`;
+  }
 }
-function refreshPragasResumo(v){
-  const r = resumoPragasValvula(v);
-  const el = document.querySelector('.section-title + div[style*="margin:-4px"]');
-  if(el) el.textContent = `${r.totalOcorrencias} ocorrência(s) registrada(s) · ${r.tiposAtivos} tipo(s) de praga presente(s) nesta válvula`;
+function wirePontoEventsPraga(v, onlyN){
+  const cards = onlyN
+    ? [document.querySelector(`#pontosWrapPraga .ponto-card[data-n="${onlyN}"]`)]
+    : [...document.querySelectorAll('#pontosWrapPraga .ponto-card')];
+
+  cards.forEach(card=>{
+    if(!card) return;
+    const n = parseInt(card.dataset.n,10);
+    const p = (v.pontosPragas||[]).find(pt=>pt.numero===n);
+    if(!p) return;
+
+    card.querySelectorAll('[data-role="sw-praga"]').forEach(sw=>{
+      sw.onclick = ()=>{
+        const pid = sw.dataset.pid;
+        const cur = p.presencas[pid] || {ativo:false, nivel:'baixo', estagio:0};
+        p.presencas[pid] = { ativo: !cur.ativo, nivel: cur.nivel||'baixo', estagio: cur.estagio||0 };
+        p.tocado = true;
+        refreshPontoCardPraga(v,p);
+      };
+    });
+    card.querySelectorAll('[data-role="nivel"]').forEach(sel=>{
+      sel.addEventListener('change', e=>{
+        const pid = sel.dataset.pid;
+        const cur = p.presencas[pid] || {ativo:true, nivel:'baixo', estagio:0};
+        cur.nivel = e.target.value;
+        p.presencas[pid] = cur;
+      });
+    });
+    card.querySelectorAll('[data-role="estagio"]').forEach(sel=>{
+      sel.addEventListener('change', e=>{
+        const pid = sel.dataset.pid;
+        const cur = p.presencas[pid] || {ativo:true, nivel:'baixo', estagio:0};
+        cur.estagio = parseInt(e.target.value,10);
+        p.presencas[pid] = cur;
+      });
+    });
+
+    card.querySelector('[data-role="obs-toggle"]').onclick = ()=>{
+      const w = card.querySelector('[data-role="obs-wrap"]');
+      w.style.display = w.style.display==='none' ? 'block' : 'none';
+      if(w.style.display==='block') card.querySelector('[data-role="obs-text"]').focus();
+    };
+    card.querySelector('[data-role="obs-text"]').addEventListener('input', e=>{
+      p.obs = e.target.value; p.tocado = p.tocado || e.target.value.trim().length>0;
+    });
+
+    wirePhotoSection(card, p.fotos, ()=>{ p.tocado=true; refreshPontoCardPraga(v,p); });
+  });
 }
 function wirePragasManager(){
   const btn = document.getElementById('btnTogglePragasManager');
