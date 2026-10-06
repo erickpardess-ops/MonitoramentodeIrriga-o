@@ -428,7 +428,7 @@ window.addEventListener('online', ()=>{
 
 
 /* ---------------- STATE ---------------- */
-const APP_VERSION = '3.8';
+const APP_VERSION = '3.9';
 const MODULOS = [
   { id:'irrigacao_cacau', titulo:'Monitoramento de Irrigação', sub:'Cacau', emoji:'💧', canto:'🍫', cor:'#2F4A2C', cultura:'cacau', tipo:'irrigacao' },
   { id:'irrigacao_coco', titulo:'Monitoramento de Irrigação', sub:'Coco', emoji:'💧', canto:'🥥', cor:'#1F5A78', cultura:'coco', tipo:'irrigacao' },
@@ -870,7 +870,7 @@ function exportCSVPragas(lista){
         if(!p.tocado) return;
         const ativas = state.pragasTipos.filter(pt=>p.presencas[pt.id] && p.presencas[pt.id].ativo);
         if(ativas.length===0){
-          rows.push([s.nome, s.data, s.responsavel, v.label, p.numero, 'Sim', '(nenhuma)', '', '', p.fotos.length, p.obs].map(csvEsc).join(';'));
+          rows.push([s.nome, s.data, s.responsavel, v.label, p.numero, 'Sim', '(nenhuma)', '—', '', p.fotos.length, p.obs].map(csvEsc).join(';'));
         } else {
           ativas.forEach(pt=>{
             const pr = p.presencas[pt.id];
@@ -968,7 +968,7 @@ function buildRowsPragas(lista){
         if(!p.tocado) return;
         const ativas = state.pragasTipos.filter(pt=>p.presencas[pt.id] && p.presencas[pt.id].ativo);
         if(ativas.length===0){
-          rows.push({ Setor:s.nome, Data:s.data, Responsavel:s.responsavel, Valvula:v.label, Ponto:p.numero, Ponto_Avaliado:'Sim', Praga:'(nenhuma)', Nivel:'', Estagio_Lagarta:'', Qtd_Fotos:p.fotos.length, Obs_Ponto:p.obs });
+          rows.push({ Setor:s.nome, Data:s.data, Responsavel:s.responsavel, Valvula:v.label, Ponto:p.numero, Ponto_Avaliado:'Sim', Praga:'(nenhuma)', Nivel:'—', Estagio_Lagarta:'', Qtd_Fotos:p.fotos.length, Obs_Ponto:p.obs });
         } else {
           ativas.forEach(pt=>{
             const pr = p.presencas[pt.id];
