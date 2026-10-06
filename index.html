@@ -288,6 +288,13 @@
 
   input[type=file]{display:none;}
 </style>
+<script>
+  // Liga o modo offline logo de cara. Antes o registro só acontecia depois de carregar os
+  // dados do Firebase, e em aparelhos novos podia nunca acontecer: aí o app não abria sem internet.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('service-worker.js').catch(function () {});
+  }
+</script>
 </head>
 <body>
 
@@ -305,7 +312,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {
   getFirestore, doc, setDoc, deleteDoc, getDoc, getDocs, collection,
-  enableIndexedDbPersistence
+  enableIndexedDbPersistence, getDocsFromCache, getDocFromCache
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -346,19 +353,27 @@ function limparParaFirestore(obj){
   return limpo;
 }
 
+function comPrazo(promessa, ms){
+  return Promise.race([promessa, new Promise((_, rej)=>setTimeout(()=>rej(new Error('sem resposta da internet')), ms))]);
+}
+/** Lê do Firebase; sem internet (ou com sinal fraco no campo), usa a cópia guardada no aparelho. */
 async function carregarTudoDoFirestore(){
-  const snap = await getDocs(collection(db, 'setores'));
+  let snap, doAparelho = false;
+  try{ snap = await comPrazo(getDocs(collection(db, 'setores')), 6000); }
+  catch(e){ snap = await getDocsFromCache(collection(db, 'setores')); doAparelho = true; }
   const setores = [];
   snap.forEach(d=> setores.push(d.data()));
   let config = null, configFalhou = false;
   try{
-    const cfgDoc = await getDoc(doc(db,'config','app'));
+    let cfgDoc;
+    try{ cfgDoc = doAparelho ? await getDocFromCache(doc(db,'config','app')) : await comPrazo(getDoc(doc(db,'config','app')), 6000); }
+    catch(e1){ cfgDoc = await getDocFromCache(doc(db,'config','app')); }
     if(cfgDoc.exists()) config = cfgDoc.data();
   }catch(e){
     configFalhou = true;
     console.error('Falha ao carregar config (inclui a senha de exclusão) do Firestore:', e);
   }
-  return { setores, config, configFalhou };
+  return { setores, config, configFalhou, doAparelho };
 }
 async function salvarSetorFirestore(setor){
   try{ await setDoc(doc(db,'setores', setor.id), limparParaFirestore(setor)); }
@@ -387,14 +402,24 @@ function agendarSalvarConfig(){
   timerSalvarConfig = setTimeout(salvarConfigFirestore, 1200);
 }
 let timerAutoSync = null;
-function agendarAutoSyncSheets(){
-  clearTimeout(timerAutoSync);
-  timerAutoSync = setTimeout(()=>{ sendToSheets(true); }, 4000);
+function marcarPendenteSheets(sim){
+  try{ if(sim) localStorage.setItem('pendenteSheets','1'); else localStorage.removeItem('pendenteSheets'); }catch(e){}
 }
+function temPendenteSheets(){
+  try{ return localStorage.getItem('pendenteSheets') === '1'; }catch(e){ return false; }
+}
+function agendarAutoSyncSheets(){
+  marcarPendenteSheets(true);
+  clearTimeout(timerAutoSync);
+  timerAutoSync = setTimeout(()=>{ if(navigator.onLine !== false) sendToSheets(true); }, 4000);
+}
+window.addEventListener('online', ()=>{
+  if(temPendenteSheets()){ showToast('Internet de volta — enviando para a planilha…'); agendarAutoSyncSheets(); }
+});
 
 
 /* ---------------- STATE ---------------- */
-const APP_VERSION = '3.5';
+const APP_VERSION = '3.6';
 const MODULOS = [
   { id:'irrigacao_cacau', titulo:'Monitoramento de Irrigação', sub:'Cacau', emoji:'💧', canto:'🍫', cor:'#2F4A2C', cultura:'cacau', tipo:'irrigacao' },
   { id:'irrigacao_coco', titulo:'Monitoramento de Irrigação', sub:'Coco', emoji:'💧', canto:'🥥', cor:'#1F5A78', cultura:'coco', tipo:'irrigacao' },
@@ -986,6 +1011,7 @@ async function sendToSheets(silencioso){
     let json = null;
     try{ json = JSON.parse(text); }catch(e){}
     if(json && json.ok){
+      marcarPendenteSheets(false);
       showToast('✓ Sincronizado com o Google Sheets');
     } else if(json && json.ok===false){
       if(silencioso) showToast('Erro ao sincronizar com o Sheets (toque em "Testar link" para detalhes)');
@@ -2084,6 +2110,8 @@ try{
   migrarSetoresPragas(state.setores);
   if(configFalhou){
     showToast('⚠️ Não deu pra confirmar a senha de exclusão agora — exclusão bloqueada até recarregar com internet');
+  } else if(doAparelho){
+    showToast(`Sem internet — ${setores.length} setor(es) do aparelho. Tudo fica salvo e vai para a planilha quando a internet voltar.`);
   } else {
     showToast(setores.length ? `${setores.length} setor(es) carregado(s)` : 'Pronto — nenhum setor ainda');
   }
@@ -2093,12 +2121,7 @@ try{
   showToast('Sem conexão — recarregue com internet antes de excluir setores');
 }
 render();
-
-if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('service-worker.js').catch(()=>{});
-  });
-}
+if(navigator.onLine !== false && temPendenteSheets()) agendarAutoSyncSheets();
 </script>
 </body>
 </html>
