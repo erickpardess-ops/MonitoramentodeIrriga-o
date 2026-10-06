@@ -232,8 +232,17 @@
   .ponto-card{
     border:1px solid var(--line);border-radius:9px;padding:11px 12px;margin-bottom:8px;background:var(--surface);
   }
-  .ponto-card.touched.danger{border-color:var(--danger);background:var(--danger-bg);}
-  .ponto-card.touched.ok{border-color:var(--ok);background:var(--ok-bg);}
+  .ponto-card.touched.danger{border-color:var(--danger);background:var(--danger-bg);border-left:6px solid var(--danger);}
+  .ponto-card.touched.ok{border-color:var(--ok);background:var(--ok-bg);border-left:6px solid var(--ok);}
+  .ponto-card.touched.ok .ponto-head .status{color:var(--ok);font-size:0.72rem;}
+  .ponto-card.touched.danger .ponto-head .status{color:var(--danger);}
+  .btn-ok-ponto{
+    display:block;width:100%;margin:0 0 10px;padding:11px 10px;border:2px solid var(--ok);border-radius:9px;
+    background:#fff;color:var(--ok);font-weight:800;font-size:0.9rem;
+  }
+  .btn-ok-ponto:active{background:var(--ok-bg);}
+  .ok-acoes{display:flex;gap:8px;justify-content:flex-end;margin:-2px 0 2px;}
+  .ok-acoes button{background:#fff;border:1px solid var(--ok);color:var(--ok);border-radius:7px;padding:5px 12px;font-size:0.72rem;font-weight:700;}
   .ponto-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
   .ponto-head .n{font-family:var(--font-mono);font-weight:800;font-size:0.85rem;color:var(--forest);}
   .ponto-head .status{font-size:0.65rem;font-weight:700;text-transform:uppercase;color:var(--ink-soft);}
@@ -419,7 +428,7 @@ window.addEventListener('online', ()=>{
 
 
 /* ---------------- STATE ---------------- */
-const APP_VERSION = '3.7';
+const APP_VERSION = '3.8';
 const MODULOS = [
   { id:'irrigacao_cacau', titulo:'Monitoramento de Irrigação', sub:'Cacau', emoji:'💧', canto:'🍫', cor:'#2F4A2C', cultura:'cacau', tipo:'irrigacao' },
   { id:'irrigacao_coco', titulo:'Monitoramento de Irrigação', sub:'Coco', emoji:'💧', canto:'🥥', cor:'#1F5A78', cultura:'coco', tipo:'irrigacao' },
@@ -1474,6 +1483,34 @@ function pragasManagerHTML(){
     </div>
   </div>`;
 }
+/* ---------------- OK RÁPIDO NOS PONTOS ----------------
+   Ponto sem problema: um toque em "✓ OK" marca o ponto como feito. O cartão fica verde e
+   se fecha (menos rolagem no campo); "Editar" abre de novo e "Desfazer" volta a pendente.
+   Na planilha nada muda: conta como ponto avaliado sem ocorrência. */
+const pontosAbertos = new Set();   // pontos já OK que você abriu para editar (só nesta tela)
+function chavePonto(numero){ return state.setorId + '|' + state.valvIdx + '|' + numero; }
+function cabecalhoPontoHTML(p, status, titulo, textoOk){
+  const aberto = pontosAbertos.has(chavePonto(p.numero));
+  const txt = status==='pending' ? 'Pendente' : status==='ok' ? '✓ ' + textoOk : 'Com ocorrência';
+  let acoes = '';
+  if(status==='pending') acoes = `<button type="button" class="btn-ok-ponto" data-role="marcar-ok">✓ OK — ${textoOk.toLowerCase()}</button>`;
+  else if(status==='ok') acoes = `<div class="ok-acoes"><button type="button" data-role="editar-ponto">${aberto ? 'Fechar' : '✎ Editar'}</button><button type="button" data-role="desfazer-ok">Desfazer</button></div>`;
+  return `<div class="ponto-head"><div class="n">${titulo}</div><div class="status">${txt}</div></div>${acoes}`;
+}
+function corpoPontoAberto(p, status){ return !(status==='ok' && !pontosAbertos.has(chavePonto(p.numero))); }
+function ligarOkPonto(card, p, refazer){
+  const ok = card.querySelector('[data-role="marcar-ok"]');
+  if(ok) ok.onclick = ()=>{ p.tocado = true; pontosAbertos.delete(chavePonto(p.numero)); refazer(); };
+  const ed = card.querySelector('[data-role="editar-ponto"]');
+  if(ed) ed.onclick = ()=>{
+    const k = chavePonto(p.numero);
+    if(pontosAbertos.has(k)) pontosAbertos.delete(k); else pontosAbertos.add(k);
+    refazer();
+  };
+  const des = card.querySelector('[data-role="desfazer-ok"]');
+  if(des) des.onclick = ()=>{ p.tocado = false; pontosAbertos.delete(chavePonto(p.numero)); refazer(); };
+}
+
 function pontoCardHTMLPraga(p){
   const status = pontoStatusPraga(p);
   const linhas = state.pragasTipos.map(pt=>{
@@ -1515,16 +1552,15 @@ function pontoCardHTMLPraga(p){
   }).join('');
   return `
   <div class="ponto-card ${p.tocado?'touched':''} ${status!=='pending'?status:''}" data-n="${p.numero}">
-    <div class="ponto-head">
-      <div class="n">Ponto ${p.numero}</div>
-      <div class="status">${status==='pending'?'Pendente':status==='ok'?'Sem ocorrência':'Com ocorrência'}</div>
-    </div>
+    ${cabecalhoPontoHTML(p, status, 'Ponto ' + p.numero, 'Sem pragas')}
+    <div data-role="corpo" style="display:${corpoPontoAberto(p, status) ? 'block' : 'none'}">
     ${linhas || '<div style="font-size:0.8rem;color:var(--ink-soft);">Nenhum tipo de praga cadastrado — toque em "Gerenciar tipos de praga" acima.</div>'}
     <button type="button" class="obs-toggle" data-role="obs-toggle">${p.obs? '✎ editar observação' : '+ observação (opcional)'}</button>
     <div class="ponto-obs" data-role="obs-wrap" style="display:${p.obs?'block':'none'}">
       <textarea data-role="obs-text" placeholder="Detalhe o que foi observado neste ponto...">${escHTML(p.obs)}</textarea>
     </div>
     ${photoSectionHTML(p.fotos, 'ponto')}
+    </div>
   </div>`;
 }
 function refreshPontoCardPraga(v, p){
@@ -1550,6 +1586,7 @@ function wirePontoEventsPraga(v, onlyN){
     const n = parseInt(card.dataset.n,10);
     const p = (v.pontosPragas||[]).find(pt=>pt.numero===n);
     if(!p) return;
+    ligarOkPonto(card, p, ()=>refreshPontoCardPraga(v,p));
 
     card.querySelectorAll('[data-role="sw-praga"]').forEach(sw=>{
       sw.onclick = ()=>{
@@ -1700,10 +1737,8 @@ function pontoCardHTML(p){
   const status = pontoStatus(p);
   return `
   <div class="ponto-card ${p.tocado?'touched':''} ${status!=='pending'?status:''}" data-n="${p.numero}">
-    <div class="ponto-head">
-      <div class="n">Ponto ${p.numero} <span style="font-weight:400;color:var(--ink-soft);">· 1,6 m</span></div>
-      <div class="status">${status==='pending'?'Pendente':status==='ok'?'OK':'Com ocorrência'}</div>
-    </div>
+    ${cabecalhoPontoHTML(p, status, 'Ponto ' + p.numero + ' <span style="font-weight:400;color:var(--ink-soft);">· 1,6 m</span>', 'Sem problemas')}
+    <div data-role="corpo" style="display:${corpoPontoAberto(p, status) ? 'block' : 'none'}">
 
     <div class="row-item">
       <div class="lbl">Gotejos entupidos<span class="sub">de 0 a 4 no trecho</span></div>
@@ -1762,6 +1797,7 @@ function pontoCardHTML(p){
     </div>
 
     ${photoSectionHTML(p.fotos, 'ponto')}
+    </div>
   </div>`;
 }
 
@@ -1790,6 +1826,7 @@ function wirePontoEvents(v, onlyN){
     if(!card) return;
     const n = parseInt(card.dataset.n,10);
     const p = v.pontos.find(pt=>pt.numero===n);
+    ligarOkPonto(card, p, ()=>refreshPontoCard(v,p));
 
     card.querySelector('[data-role="ge-minus"]').onclick = ()=>{ p.gotejosEntupidos=Math.max(0,p.gotejosEntupidos-1); p.tocado=true; refreshPontoCard(v,p); };
     card.querySelector('[data-role="ge-plus"]').onclick = ()=>{ p.gotejosEntupidos=Math.min(4,p.gotejosEntupidos+1); p.tocado=true; refreshPontoCard(v,p); };
@@ -1953,10 +1990,8 @@ function pontoCardHTMLCoco(p){
   const status = pontoStatusCoco(p);
   return `
   <div class="ponto-card ${p.tocado?'touched':''} ${status!=='pending'?status:''}" data-n="${p.numero}">
-    <div class="ponto-head">
-      <div class="n">Ponto ${p.numero}</div>
-      <div class="status">${status==='pending'?'Pendente':status==='ok'?'OK':'Com ocorrência'}</div>
-    </div>
+    ${cabecalhoPontoHTML(p, status, 'Ponto ' + p.numero, 'Sem problemas')}
+    <div data-role="corpo" style="display:${corpoPontoAberto(p, status) ? 'block' : 'none'}">
 
     <div class="row-item">
       <div class="lbl">Microaspersor entupido</div>
@@ -2022,6 +2057,7 @@ function pontoCardHTMLCoco(p){
     </div>
 
     ${photoSectionHTML(p.fotos, 'ponto')}
+    </div>
   </div>`;
 }
 function refreshPontoCardCoco(v, p){
@@ -2048,6 +2084,7 @@ function wirePontoEventsCoco(v, onlyN){
     if(!card) return;
     const n = parseInt(card.dataset.n,10);
     const p = v.pontos.find(pt=>pt.numero===n);
+    ligarOkPonto(card, p, ()=>refreshPontoCardCoco(v,p));
 
     card.querySelector('[data-role="sw-entupido"]').onclick = ()=>{ p.microEntupido=!p.microEntupido; p.tocado=true; refreshPontoCardCoco(v,p); };
     card.querySelector('[data-role="sw-defeito"]').onclick = ()=>{ p.microDefeito=!p.microDefeito; p.tocado=true; refreshPontoCardCoco(v,p); };
