@@ -1,6 +1,6 @@
 // Service worker do app de Monitoramento (Cacau & Coco) — deixa o app abrir sem internet.
 // Lembrete: suba este número de versão a cada atualização publicada.
-const CACHE_NAME = 'irrigacao-cacau-coco-v3.6';
+const CACHE_NAME = 'irrigacao-cacau-coco-v3.7';
 const PAGINA = './index.html';
 const ASSETS = [
   './',

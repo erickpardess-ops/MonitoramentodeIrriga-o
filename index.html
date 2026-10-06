@@ -359,14 +359,14 @@ function comPrazo(promessa, ms){
 /** Lê do Firebase; sem internet (ou com sinal fraco no campo), usa a cópia guardada no aparelho. */
 async function carregarTudoDoFirestore(){
   let snap, doAparelho = false;
-  try{ snap = await comPrazo(getDocs(collection(db, 'setores')), 6000); }
+  try{ snap = await comPrazo(getDocs(collection(db, 'setores')), 10000); }
   catch(e){ snap = await getDocsFromCache(collection(db, 'setores')); doAparelho = true; }
   const setores = [];
   snap.forEach(d=> setores.push(d.data()));
   let config = null, configFalhou = false;
   try{
     let cfgDoc;
-    try{ cfgDoc = doAparelho ? await getDocFromCache(doc(db,'config','app')) : await comPrazo(getDoc(doc(db,'config','app')), 6000); }
+    try{ cfgDoc = doAparelho ? await getDocFromCache(doc(db,'config','app')) : await comPrazo(getDoc(doc(db,'config','app')), 8000); }
     catch(e1){ cfgDoc = await getDocFromCache(doc(db,'config','app')); }
     if(cfgDoc.exists()) config = cfgDoc.data();
   }catch(e){
@@ -419,7 +419,7 @@ window.addEventListener('online', ()=>{
 
 
 /* ---------------- STATE ---------------- */
-const APP_VERSION = '3.6';
+const APP_VERSION = '3.7';
 const MODULOS = [
   { id:'irrigacao_cacau', titulo:'Monitoramento de Irrigação', sub:'Cacau', emoji:'💧', canto:'🍫', cor:'#2F4A2C', cultura:'cacau', tipo:'irrigacao' },
   { id:'irrigacao_coco', titulo:'Monitoramento de Irrigação', sub:'Coco', emoji:'💧', canto:'🥥', cor:'#1F5A78', cultura:'coco', tipo:'irrigacao' },
@@ -643,7 +643,10 @@ function showToast(msg){
 }
 function getSetor(id){ return state.setores.find(s=>s.id===id); }
 function migrarSetoresPragas(lista){
-  lista.forEach(s=>{
+  lista.forEach(s=>{ try{ migrarUmSetor(s); }catch(e){ console.warn('Setor com formato inesperado:', s && s.nome, e); } });
+}
+function migrarUmSetor(s){
+  [s].forEach(s=>{
     if(!Array.isArray(s.historico)) s.historico = [];
     if(s.cultura==='coco'){
       // pontos do coco passaram a ficar por válvula (antes eram por setor)
@@ -680,8 +683,9 @@ function migrarSetoresPragas(lista){
         });
       }
       ['linha1','linha66'].forEach(grp=>{
+        if(!v[grp] || typeof v[grp] !== 'object') v[grp] = novaLinha();
         ['vazaoInicial','vazaoFinal'].forEach(campo=>{
-          const atual = v[grp] && v[grp][campo];
+          const atual = v[grp][campo];
           if(!atual || typeof atual !== 'object'){
             v[grp][campo] = novaVazaoMedicao();
           }
@@ -1039,7 +1043,7 @@ function configurarWebAppUrl(){
 }
 function configurarSenhaExclusao(){
   if(!state.configCarregadoOk){
-    showToast('Sem conexão com o Firestore agora — recarregue com internet antes de mudar a senha');
+    showToast('Sem internet agora — tente mudar a senha quando a internet voltar');
     return;
   }
   const temSenha = !!state.senhaExclusao;
@@ -1056,7 +1060,7 @@ function configurarSenhaExclusao(){
 }
 function confirmarSenhaExclusao(){
   if(!state.configCarregadoOk){
-    alert('Não foi possível confirmar se há senha de exclusão configurada (sem conexão com o Firestore agora).\n\nRecarregue a página com internet antes de excluir, pra garantir que a proteção por senha seja respeitada.');
+    alert('Sem internet agora, não deu para confirmar a senha de exclusão.\n\nTente excluir de novo quando a internet voltar — o app confere a senha sozinho.');
     return false;
   }
   if(!state.senhaExclusao) return true;
@@ -1141,7 +1145,7 @@ function renderHome(){
     </div>
     <div style="font-size:0.72rem;color:var(--ink-soft);text-align:center;margin:-6px 0 4px;">☁️ Salvo automaticamente — sincroniza sozinho com o Google Sheets</div>
     <div style="font-size:0.72rem;text-align:center;margin:0 0 14px;color:${!state.configCarregadoOk?'var(--danger)':(state.senhaExclusao?'var(--ok)':'var(--ink-soft)')};">
-      ${!state.configCarregadoOk ? '⚠️ Sem conexão — não foi possível confirmar a senha de exclusão agora' : (state.senhaExclusao ? '🔒 Exclusão protegida por senha' : '🔓 Exclusão sem senha configurada')}
+      ${!state.configCarregadoOk ? '⚠️ Sem conexão — tentando de novo sozinho… (só a exclusão de setores fica travada até lá)' : (state.senhaExclusao ? '🔒 Exclusão protegida por senha' : '🔓 Exclusão sem senha configurada')}
     </div>
     <div class="toolbar" style="margin-top:6px;">
       <button class="btn-ghost" id="btnExpCSV">📊 Exportar planilha (.csv)</button>
@@ -1156,7 +1160,7 @@ function renderHome(){
     t.onclick = ()=>{ state.modulo = t.dataset.mod; state.view='modulo-list'; render(); };
   });
   document.getElementById('btnExpCSV').onclick = exportCSV;
-  document.getElementById('btnSenhaExclusao').onclick = configurarSenhaExclusao;
+  document.getElementById('btnSenhaExclusao').onclick = async ()=>{ await garantirConfigAgora(); configurarSenhaExclusao(); };
   document.getElementById('btnConfigSheets').onclick = configurarWebAppUrl;
   document.getElementById('btnTestarSheets').onclick = testarWebAppUrl;
   document.getElementById('btnEnviarSheets').onclick = ()=>sendToSheets();
@@ -1233,7 +1237,8 @@ function renderModuloList(){
     const id = row.dataset.id;
     row.querySelector('.btn-open').onclick = ()=>{ state.setorId=id; state.valvIdx=0; state.view='setor'; render(); };
     row.querySelector('.btn-hist').onclick = ()=>{ state.historicoSetorId=id; state.historicoTipo=m.tipo; state.view='historico'; render(); };
-    row.querySelector('.btn-del').onclick = ()=>{
+    row.querySelector('.btn-del').onclick = async ()=>{
+      await garantirConfigAgora();
       if(!confirmarSenhaExclusao()) return;
       if(confirm('Excluir este setor e todos os dados aferidos nele?')){
         state.setores = state.setores.filter(s=>s.id!==id);
@@ -2095,11 +2100,68 @@ function render(){
   }
   window.scrollTo(0,0);
 }
+/* ---------------- RECONEXÃO AUTOMÁTICA ----------------
+   Se ao abrir não deu para confirmar a senha de exclusão (sem internet ou sinal fraco),
+   o app tenta de novo sozinho: a cada 20 s, quando a internet volta e quando você volta
+   para o app. Quando consegue, o aviso some sem precisar fechar e abrir. */
+let reconectando = null, timerReconexao = null;
+function aplicarConfig(config){
+  if(!config) return;
+  if(config.webAppUrl) state.webAppUrl = config.webAppUrl;
+  if(config.senhaExclusao!==undefined) state.senhaExclusao = config.senhaExclusao;
+  if(Array.isArray(config.pragasTipos) && config.pragasTipos.length) state.pragasTipos = config.pragasTipos;
+}
+function tentarReconectar(avisar){
+  if(reconectando) return reconectando;
+  reconectando = (async ()=>{
+    try{
+      const cfgDoc = await comPrazo(getDoc(doc(db,'config','app')), 10000);
+      aplicarConfig(cfgDoc.exists() ? cfgDoc.data() : null);
+      state.configCarregadoOk = true;
+      pararReconexao();
+      if(!state.setores.length){
+        // não tinha conseguido carregar os setores: traz agora (sem apagar nada criado no aparelho)
+        try{
+          const snap = await comPrazo(getDocs(collection(db,'setores')), 15000);
+          const ids = new Set(state.setores.map(x=>x.id)), novos = [];
+          snap.forEach(d=>{ const x = d.data(); if(x && !ids.has(x.id)) novos.push(x); });
+          if(novos.length){ migrarSetoresPragas(novos); state.setores = state.setores.concat(novos); }
+        }catch(e){}
+      }
+      if(state.view==='home' || state.view==='modulo-list') render();
+      if(avisar) showToast('✓ Conexão de volta — senha de exclusão confirmada');
+      return true;
+    }catch(e){
+      return false;
+    }finally{
+      reconectando = null;
+    }
+  })();
+  return reconectando;
+}
+function iniciarReconexao(){
+  if(timerReconexao || state.configCarregadoOk) return;
+  timerReconexao = setInterval(()=>{ if(navigator.onLine !== false) tentarReconectar(true); }, 20000);
+}
+function pararReconexao(){
+  if(timerReconexao){ clearInterval(timerReconexao); timerReconexao = null; }
+}
+/** Antes de excluir ou mexer na senha: se ainda não confirmou, tenta na hora. */
+async function garantirConfigAgora(){
+  if(state.configCarregadoOk) return true;
+  showToast('Conferindo a senha de exclusão…');
+  return await tentarReconectar(false);
+}
+window.addEventListener('online', ()=>{ if(!state.configCarregadoOk) tentarReconectar(true); });
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && !state.configCarregadoOk) tentarReconectar(true);
+});
+
 /* ---------------- CARGA INICIAL DO FIRESTORE ---------------- */
 renderHeader();
 document.getElementById('app').innerHTML = '<div class="empty-state">Carregando seus dados…</div>';
 try{
-  const { setores, config, configFalhou } = await carregarTudoDoFirestore();
+  const { setores, config, configFalhou, doAparelho } = await carregarTudoDoFirestore();
   state.setores = setores;
   if(config){
     if(config.webAppUrl) state.webAppUrl = config.webAppUrl;
@@ -2109,7 +2171,7 @@ try{
   state.configCarregadoOk = !configFalhou;
   migrarSetoresPragas(state.setores);
   if(configFalhou){
-    showToast('⚠️ Não deu pra confirmar a senha de exclusão agora — exclusão bloqueada até recarregar com internet');
+    showToast('Sem conexão boa agora — vou confirmar a senha de exclusão sozinho quando a internet voltar');
   } else if(doAparelho){
     showToast(`Sem internet — ${setores.length} setor(es) do aparelho. Tudo fica salvo e vai para a planilha quando a internet voltar.`);
   } else {
@@ -2118,9 +2180,10 @@ try{
 }catch(err){
   console.error('Falha ao carregar do Firestore:', err);
   state.configCarregadoOk = false;
-  showToast('Sem conexão — recarregue com internet antes de excluir setores');
+  showToast('Sem conexão boa agora — o app vai tentar de novo sozinho');
 }
 render();
+if(!state.configCarregadoOk) iniciarReconexao();
 if(navigator.onLine !== false && temPendenteSheets()) agendarAutoSyncSheets();
 </script>
 </body>
