@@ -428,7 +428,7 @@ window.addEventListener('online', ()=>{
 
 
 /* ---------------- STATE ---------------- */
-const APP_VERSION = '3.9';
+const APP_VERSION = '3.10';
 const MODULOS = [
   { id:'irrigacao_cacau', titulo:'Monitoramento de Irrigação', sub:'Cacau', emoji:'💧', canto:'🍫', cor:'#2F4A2C', cultura:'cacau', tipo:'irrigacao' },
   { id:'irrigacao_coco', titulo:'Monitoramento de Irrigação', sub:'Coco', emoji:'💧', canto:'🥥', cor:'#1F5A78', cultura:'coco', tipo:'irrigacao' },
@@ -498,6 +498,30 @@ function novaValvula(label){
     pontosPragas: Array.from({length:20}, (_,i)=>novoPontoPraga(i+1))
   };
 }
+/** Há algum ponto (irrigação ou pragas) já avaliado neste setor, em qualquer válvula? */
+function temPontoTocadoCacau(setor){
+  return (setor.valvulas||[]).some(v=>
+    (v.pontos||[]).some(p=>p.tocado) || (v.pontosPragas||[]).some(p=>p.tocado)
+  );
+}
+/** Começa uma rodada nova neste setor (cacau): limpa pressão/vazão e os pontos de
+ *  irrigação e de pragas de todas as válvulas, como se nada tivesse sido avaliado
+ *  ainda. Usado quando a Data do setor muda — ver aviso em wireDataSetor(). */
+function iniciarNovaRodadaCacau(setor){
+  setor.valvulas.forEach(v=>{
+    v.linha1 = novaLinha();
+    v.linha66 = novaLinha();
+    v.pontos = Array.from({length:10}, (_,i)=>novoPonto(i+1));
+    v.obsGeral = ''; v.obsFotos = [];
+    v.pontosPragas = Array.from({length:20}, (_,i)=>novoPontoPraga(i+1));
+  });
+}
+/** Liga o campo de Data com o aviso de "nova visita" — ver wireDataSetor() (definida
+ *  mais abaixo, perto da versão do coco) para o texto do aviso e a lógica comum. */
+function wireDataSetorCacau(setor, render){
+  wireDataSetor(setor, temPontoTocadoCacau, iniciarNovaRodadaCacau, render);
+}
+
 function novoSetor(nome){
   return {
     id: uid(),
@@ -557,6 +581,42 @@ function novoSetorCoco(nome){
     obsGeral: '', obsFotos: [],
     historico: []
   };
+}
+function temPontoTocadoCoco(setor){
+  return (setor.valvulas||[]).some(v=>(v.pontos||[]).some(p=>p.tocado));
+}
+/** Começa uma rodada nova neste setor (coco): limpa pressão e os 80 pontos de cada
+ *  válvula — ver iniciarNovaRodadaCacau() acima, mesma ideia. */
+function iniciarNovaRodadaCoco(setor){
+  setor.valvulas.forEach(v=>{
+    v.linha1 = novaLinhaCoco();
+    v.linha2 = novaLinhaCoco();
+    v.pontos = Array.from({length:80}, (_,i)=>novoPontoCoco(i+1));
+  });
+}
+function wireDataSetorCoco(setor, render){
+  wireDataSetor(setor, temPontoTocadoCoco, iniciarNovaRodadaCoco, render);
+}
+/**
+ * Campo "Data" do setor (cacau ou coco): mudar a data é como anunciar "esta é uma nova
+ * visita". Se o setor ainda tiver algum ponto avaliado da visita anterior, pergunta antes
+ * de limpar — sem isso, o envio automático (uns segundos depois de qualquer mudança)
+ * reenviava os pontos antigos junto com a data nova, criando uma visita "fantasma" quase
+ * vazia na planilha (foi o que aconteceu com o TA2 em 15/09).
+ */
+function wireDataSetor(setor, temPontoTocado, iniciarNovaRodada, render){
+  document.getElementById('fData').addEventListener('input', e=>{
+    const dataNova = e.target.value;
+    if(dataNova !== setor.data && temPontoTocado(setor)){
+      const comecarNova = confirm(
+        `Mudar a data para ${dataNova} é o início de uma nova visita a este setor?\n\n`+
+        `OK = Sim — limpa os pontos já avaliados e começa do zero nesta data nova.\n`+
+        `Cancelar = Não — só corrige a data, mantendo o que já foi preenchido.`
+      );
+      if(comecarNova){ iniciarNovaRodada(setor); setor.data = dataNova; render(); return; }
+    }
+    setor.data = dataNova;
+  });
 }
 /* setores e válvulas padrão da área de coco, conforme numeração de campo */
 function gerarSetoresPadraoCoco(){
@@ -1180,17 +1240,26 @@ function resumoSetorModulo(setor, tipo){
 }
 
 /* ---------------- RENDER: LISTA DE SETORES DE UM MÓDULO ---------------- */
+/** Concluído = todos os pontos/válvulas desse setor já foram avaliados ao menos uma vez. */
+function setorConcluido(s, tipo){
+  const r = resumoSetorModulo(s, tipo);
+  return r.total>0 && r.avaliados===r.total;
+}
 function renderModuloList(){
   const m = getModulo(state.modulo) || MODULOS[0];
   const app = document.getElementById('app');
-  const lista = state.setores.filter(s=>s.cultura===m.cultura);
+  const todos = state.setores.filter(s=>s.cultura===m.cultura);
+  if(!state.filtroSetorLista) state.filtroSetorLista = 'pendentes';
+  const concluidos = todos.filter(s=>setorConcluido(s, m.tipo));
+  const pendentes = todos.filter(s=>!setorConcluido(s, m.tipo));
+  const lista = state.filtroSetorLista==='concluidos' ? concluidos : state.filtroSetorLista==='pendentes' ? pendentes : todos;
 
   let totAval=0, totProb=0;
-  lista.forEach(s=>{ const r = resumoSetorModulo(s, m.tipo); totAval+=r.avaliados; totProb+=r.problemas; });
+  todos.forEach(s=>{ const r = resumoSetorModulo(s, m.tipo); totAval+=r.avaliados; totProb+=r.problemas; });
 
   let html = `
     <div class="stat-row">
-      <div class="stat"><div class="num">${lista.length}</div><div class="lbl">Setores</div></div>
+      <div class="stat"><div class="num">${todos.length}</div><div class="lbl">Setores</div></div>
       <div class="stat"><div class="num">${totAval}</div><div class="lbl">${m.tipo==='pragas'?'Válvulas com registro':'Pontos avaliados'}</div></div>
       <div class="stat"><div class="num" style="color:${totProb>0?'var(--danger)':'var(--ok)'}">${totProb}</div><div class="lbl">${m.tipo==='pragas'?'Ocorrências (insetos)':'Com ocorrência'}</div></div>
     </div>
@@ -1198,9 +1267,16 @@ function renderModuloList(){
     <div class="toolbar" style="margin-top:14px;">
       <button class="btn-ghost" id="btnPadraoMod">${m.canto} Carregar setores padrão (${m.sub})</button>
     </div>
+    <div class="chip-row" style="margin-top:14px;">
+      <div class="chip ${state.filtroSetorLista==='pendentes'?'active':''}" data-fl="pendentes">Pendentes (${pendentes.length})</div>
+      <div class="chip ${state.filtroSetorLista==='concluidos'?'active':''}" data-fl="concluidos">Concluídos (${concluidos.length})</div>
+      <div class="chip ${state.filtroSetorLista==='todos'?'active':''}" data-fl="todos">Todos (${todos.length})</div>
+    </div>
   `;
-  if(lista.length===0){
+  if(todos.length===0){
     html += `<div class="empty-state"><div class="pod">${m.canto}</div>Nenhum setor de ${m.sub} cadastrado ainda.<br>Toque em "Carregar setores padrão" ou crie um setor manualmente.</div>`;
+  } else if(lista.length===0){
+    html += `<div class="empty-state">Nenhum setor ${state.filtroSetorLista==='concluidos'?'concluído':'pendente'} no momento.</div>`;
   } else {
     [...lista].reverse().forEach(s=>{
       const r = resumoSetorModulo(s, m.tipo);
@@ -1225,6 +1301,9 @@ function renderModuloList(){
   }
   app.innerHTML = html;
 
+  app.querySelectorAll('.chip-row .chip').forEach(c=>{
+    c.onclick = ()=>{ state.filtroSetorLista = c.dataset.fl; render(); };
+  });
   document.getElementById('btnNovoSetorMod').onclick = ()=>{
     const s = m.cultura==='coco' ? novoSetorCoco() : novoSetor();
     state.setores.push(s);
@@ -1368,7 +1447,7 @@ function renderSetor(){
   app.innerHTML = html;
 
   document.getElementById('fNome').addEventListener('input', e=>{ setor.nome=e.target.value; });
-  document.getElementById('fData').addEventListener('input', e=>{ setor.data=e.target.value; });
+  wireDataSetorCacau(setor, render);
   document.getElementById('fResp').addEventListener('input', e=>{ setor.responsavel=e.target.value; });
   const swDupla = document.getElementById('swDupla');
   if(swDupla) swDupla.onclick = ()=>{ setor.medicaoDupla = !setor.medicaoDupla; render(); };
@@ -1936,7 +2015,7 @@ function renderSetorCoco(){
   app.innerHTML = html;
 
   document.getElementById('fNome').addEventListener('input', e=>{ setor.nome=e.target.value; });
-  document.getElementById('fData').addEventListener('input', e=>{ setor.data=e.target.value; });
+  wireDataSetorCoco(setor, render);
   document.getElementById('fResp').addEventListener('input', e=>{ setor.responsavel=e.target.value; });
   document.getElementById('fLinha2Label').addEventListener('input', e=>{ setor.segundaLinhaLabel=e.target.value; });
   document.getElementById('fValvLabel').addEventListener('input', e=>{ v.label=e.target.value; });
