@@ -429,7 +429,7 @@ window.addEventListener('online', ()=>{
 
 
 /* ---------------- STATE ---------------- */
-const APP_VERSION = '3.11';
+const APP_VERSION = '3.12';
 const MODULOS = [
   { id:'irrigacao_cacau', titulo:'Monitoramento de Irrigação', sub:'Cacau', emoji:'💧', canto:'🍫', cor:'#2F4A2C', cultura:'cacau', tipo:'irrigacao' },
   { id:'irrigacao_coco', titulo:'Monitoramento de Irrigação', sub:'Coco', emoji:'💧', canto:'🥥', cor:'#1F5A78', cultura:'coco', tipo:'irrigacao' },
@@ -1428,7 +1428,7 @@ function renderModuloList(){
   const m = getModulo(state.modulo) || MODULOS[0];
   const app = document.getElementById('app');
   const todos = state.setores.filter(s=>s.cultura===m.cultura);
-  if(!state.filtroSetorLista) state.filtroSetorLista = 'pendentes';
+  if(!state.filtroSetorLista) state.filtroSetorLista = 'todos';
   const concluidos = todos.filter(s=>setorConcluido(s, m.tipo));
   const pendentes = todos.filter(s=>!setorConcluido(s, m.tipo));
   let lista = state.filtroSetorLista==='concluidos' ? concluidos : state.filtroSetorLista==='pendentes' ? pendentes : todos;
@@ -1461,7 +1461,7 @@ function renderModuloList(){
   } else if(lista.length===0){
     html += `<div class="empty-state">${busca?'Nenhum setor encontrado com esse nome.':'Nenhum setor '+(state.filtroSetorLista==='concluidos'?'concluído':'pendente')+' no momento.'}</div>`;
   } else {
-    [...lista].reverse().forEach(s=>{
+    [...lista].sort((a,b)=> (b.data||'').localeCompare(a.data||'') || (a.nome||'').localeCompare(b.nome||'')).forEach(s=>{
       const r = resumoSetorModulo(s, m.tipo);
       let badge = r.avaliados===0 ? `<span class="badge pending">Não iniciado</span>`
         : r.problemas>0 ? `<span class="badge danger">${r.problemas} ${m.tipo==='pragas'?'ocorrência(s)':'problema(s)'}</span>`
