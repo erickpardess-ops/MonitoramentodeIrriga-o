@@ -394,7 +394,8 @@ async function excluirSetorFirestore(id){
 }
 async function salvarConfigFirestore(){
   try{
-    await setDoc(doc(db,'config','app'), { pragasTipos: state.pragasTipos, webAppUrl: state.webAppUrl, senhaExclusao: state.senhaExclusao||'' });
+    await setDoc(doc(db,'config','app'), { pragasTipos: state.pragasTipos, webAppUrl: state.webAppUrl, senhaExclusao: state.senhaExclusao||'',
+      aplicacoesCacau: state.aplicacoesCacau||[], produtosAplicacao: state.produtosAplicacao||[] });
   }catch(e){ console.error('Falha ao salvar config no Firestore:', e); }
 }
 
@@ -428,7 +429,7 @@ window.addEventListener('online', ()=>{
 
 
 /* ---------------- STATE ---------------- */
-const APP_VERSION = '3.10';
+const APP_VERSION = '3.11';
 const MODULOS = [
   { id:'irrigacao_cacau', titulo:'Monitoramento de Irrigação', sub:'Cacau', emoji:'💧', canto:'🍫', cor:'#2F4A2C', cultura:'cacau', tipo:'irrigacao' },
   { id:'irrigacao_coco', titulo:'Monitoramento de Irrigação', sub:'Coco', emoji:'💧', canto:'🥥', cor:'#1F5A78', cultura:'coco', tipo:'irrigacao' },
@@ -440,6 +441,7 @@ let state = {
   view:'home', modulo:null, setorId:null, valvIdx:0, setores:[], cocoFiltro:'todos',
   webAppUrl:'https://script.google.com/macros/s/AKfycby2fY9XUmx0jv0MLQwJoFuefXs2UfjO7zYonZKmdPUhAuqHemnlSGTB9jOAtbjVFJI/exec',
   senhaExclusao:'', configCarregadoOk:false,
+  aplicacoesCacau:[], produtosAplicacao:[], buscaSetorLista:'', buscaAplicacao:'',
   showPragasManager:false, historicoSetorId:null, historicoTipo:null,
   pragasTipos: [
     {id:'p01', nome:'Lagarta (Lepidópteros Spp.)', tipo:'lagarta'},
@@ -1069,6 +1071,11 @@ async function sendToSheets(silencioso){
     cacauPragas: buildRowsPragas(cacauList),
     cocoPontos: buildRowsCoco(cocoList),
     cocoValvulas: buildValvulasCoco(cocoList),
+    aplicacoesCacau: (state.aplicacoesCacau||[]).map(a=>({
+      Id: a.id, Setor: a.setor, Data: a.data,
+      Produto1: a.produtos[0]||'', Produto2: a.produtos[1]||'', Produto3: a.produtos[2]||'', Produto4: a.produtos[3]||'',
+      Observacao: a.observacao||''
+    })),
     cacauIrrigacaoHistorico: buildHistoricoRows(cacauList, 'irrigacao'),
     cacauPragasHistorico: buildHistoricoRows(cacauList, 'pragas'),
     cocoIrrigacaoHistorico: buildHistoricoRows(cocoList, 'irrigacao')
@@ -1186,6 +1193,10 @@ function renderHeader(){
     row.innerHTML = `<button class="back-link" id="btnBack">← Voltar</button>`;
     sub.innerHTML = `<strong style="color:#fff;font-family:var(--font-body);font-size:0.95rem;">📊 Histórico</strong>`;
     document.getElementById('btnBack').onclick = ()=>{ state.view='modulo-list'; render(); };
+  } else if(state.view==='aplicacoes'){
+    row.innerHTML = `<button class="back-link" id="btnBack">← Início</button>`;
+    sub.innerHTML = `<strong style="color:#fff;font-family:var(--font-body);font-size:0.95rem;">🧪 Aplicações — Cacau</strong>`;
+    document.getElementById('btnBack').onclick = ()=>{ state.view='home'; render(); };
   } else {
     const setor = getSetor(state.setorId);
     const m = getModulo(state.modulo) || MODULOS[0];
@@ -1217,6 +1228,7 @@ function renderHome(){
       ${!state.configCarregadoOk ? '⚠️ Sem conexão — tentando de novo sozinho… (só a exclusão de setores fica travada até lá)' : (state.senhaExclusao ? '🔒 Exclusão protegida por senha' : '🔓 Exclusão sem senha configurada')}
     </div>
     <div class="toolbar" style="margin-top:6px;">
+      <button class="btn-ghost" id="btnAplicacoes" style="border-color:#00B050;color:#00B050;">🧪 Aplicações (produtos)</button>
       <button class="btn-ghost" id="btnExpCSV">📊 Exportar planilha (.csv)</button>
       <button class="btn-ghost" id="btnSenhaExclusao">🔒 Senha de exclusão</button>
       <button class="btn-ghost" id="btnConfigSheets">🔗 Configurar Google Sheets</button>
@@ -1228,11 +1240,178 @@ function renderHome(){
   app.querySelectorAll('.modulo-tile').forEach(t=>{
     t.onclick = ()=>{ state.modulo = t.dataset.mod; state.view='modulo-list'; render(); };
   });
+  document.getElementById('btnAplicacoes').onclick = ()=>{ state.view='aplicacoes'; render(); };
   document.getElementById('btnExpCSV').onclick = exportCSV;
   document.getElementById('btnSenhaExclusao').onclick = async ()=>{ await garantirConfigAgora(); configurarSenhaExclusao(); };
   document.getElementById('btnConfigSheets').onclick = configurarWebAppUrl;
   document.getElementById('btnTestarSheets').onclick = testarWebAppUrl;
   document.getElementById('btnEnviarSheets').onclick = ()=>sendToSheets();
+}
+
+/* ---------------- APLICAÇÕES (DATA + PRODUTO POR SETOR) ---------------- */
+function novaAplicacao(){
+  return { id: uid(), setor:'', data: new Date().toISOString().slice(0,10), produtos:[], observacao:'' };
+}
+function setoresCacauConhecidos(){
+  return [...new Set(state.setores.filter(s=>s.cultura==='cacau').map(s=>s.nome).filter(Boolean))].sort();
+}
+function salvarAplicacoesAgora(){
+  agendarSalvarConfig();
+  agendarAutoSyncSheets();
+}
+function produtosManagerHTML(){
+  return `
+  <div class="card" id="produtosManagerCard">
+    <label style="font-size:0.72rem;font-weight:700;color:var(--ink-soft);text-transform:uppercase;display:block;margin-bottom:8px;">Produtos cadastrados</label>
+    <div id="produtosListWrap">
+      ${state.produtosAplicacao.map(p=>`
+      <div class="row-item" data-pid="${p.id}">
+        <input type="text" class="tipo-detalhe" style="margin:0;flex:1;" data-role="produto-nome" value="${escAttr(p.nome)}">
+        <button type="button" class="btn-danger-outline" data-role="produto-rm" style="padding:5px 10px;font-size:0.7rem;flex-shrink:0;">Remover</button>
+      </div>`).join('') || '<div style="font-size:0.8rem;color:var(--ink-soft);">Nenhum produto cadastrado ainda.</div>'}
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+      <input type="text" id="novoProdutoInput" placeholder="Novo produto..." style="flex:1;min-width:140px;border:1.5px solid var(--line);border-radius:8px;padding:8px 10px;font-size:0.85rem;">
+      <button type="button" class="btn-secondary" id="btnAddProduto">+ Adicionar</button>
+    </div>
+  </div>`;
+}
+function aplicacaoFormHTML(ap){
+  const setores = setoresCacauConhecidos();
+  return `
+  <div class="card" id="formAplicacao" style="border-color:#00B050;">
+    <label style="font-size:0.72rem;font-weight:700;color:var(--ink-soft);text-transform:uppercase;display:block;margin-bottom:6px;">Setor</label>
+    <select id="fApSetor" style="width:100%;border:1.5px solid var(--line);border-radius:8px;padding:9px 10px;font-size:0.9rem;margin-bottom:10px;">
+      <option value="">Selecione...</option>
+      ${setores.map(s=>`<option value="${escAttr(s)}" ${ap.setor===s?'selected':''}>${escHTML(s)}</option>`).join('')}
+    </select>
+    <label style="font-size:0.72rem;font-weight:700;color:var(--ink-soft);text-transform:uppercase;display:block;margin-bottom:6px;">Data da aplicação</label>
+    <input type="date" id="fApData" value="${escAttr(ap.data)}" style="width:100%;border:1.5px solid var(--line);border-radius:8px;padding:9px 10px;font-size:0.9rem;margin-bottom:10px;">
+    <label style="font-size:0.72rem;font-weight:700;color:var(--ink-soft);text-transform:uppercase;display:block;margin-bottom:6px;">Produto(s)</label>
+    <div id="fApProdutos" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;">
+      ${state.produtosAplicacao.length ? state.produtosAplicacao.map(p=>`
+        <label style="display:flex;align-items:center;gap:5px;font-size:0.8rem;background:var(--surface-2);border-radius:14px;padding:5px 10px;">
+          <input type="checkbox" data-role="chk-produto" value="${escAttr(p.nome)}" ${ap.produtos.includes(p.nome)?'checked':''}> ${escHTML(p.nome)}
+        </label>`).join('') : '<span class="sub" style="display:inline;">Nenhum produto cadastrado — adicione abaixo.</span>'}
+    </div>
+    <button type="button" class="btn-ghost" id="btnToggleProdutosManager" style="margin-bottom:10px;">⚙️ Gerenciar produtos</button>
+    ${state.showProdutosManager ? produtosManagerHTML() : ''}
+    <label style="font-size:0.72rem;font-weight:700;color:var(--ink-soft);text-transform:uppercase;display:block;margin-bottom:6px;">Observação (opcional)</label>
+    <textarea id="fApObs" placeholder="Ex.: fungicida, metade do setor...">${escHTML(ap.observacao)}</textarea>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button type="button" class="btn-primary" id="btnSalvarAplicacao" style="background:#00B050;flex:1;">Salvar</button>
+      <button type="button" class="btn-ghost" id="btnCancelarAplicacao">Cancelar</button>
+    </div>
+  </div>`;
+}
+function renderAplicacoes(){
+  const app = document.getElementById('app');
+  const busca = (state.buscaAplicacao||'').trim().toLowerCase();
+  const lista = state.aplicacoesCacau
+    .filter(a=>!busca || a.setor.toLowerCase().includes(busca))
+    .sort((a,b)=> b.data<a.data?-1:(b.data>a.data?1:0));
+
+  let html = `
+    <div class="toolbar" style="margin-bottom:10px;">
+      <input type="text" id="buscaAplicacao" placeholder="🔎 Buscar por setor..." value="${escAttr(state.buscaAplicacao||'')}"
+        style="flex:1;min-width:160px;border:1.5px solid var(--line);border-radius:8px;padding:9px 10px;font-size:0.9rem;">
+    </div>
+    ${state.editandoAplicacaoId==null ? `<button class="btn-primary" id="btnNovaAplicacao" style="background:#00B050;margin-bottom:14px;">+ Nova aplicação</button>` : ''}
+  `;
+  if(state.editandoAplicacaoId!==undefined && state.editandoAplicacaoId!==null){
+    const ap = state.editandoAplicacaoId==='nova' ? novaAplicacao() : state.aplicacoesCacau.find(a=>a.id===state.editandoAplicacaoId);
+    html += aplicacaoFormHTML(ap);
+  }
+  html += `<div id="listaAplicacoes">`;
+  if(lista.length===0){
+    html += `<div class="empty-state">${busca?'Nenhuma aplicação encontrada para esse setor.':'Nenhuma aplicação cadastrada ainda.'}</div>`;
+  } else {
+    lista.forEach(a=>{
+      const [y,mn,d] = (a.data||'').split('-');
+      html += `
+      <div class="card" style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+          <div>
+            <div style="font-weight:800;font-size:1rem;">${escHTML(a.setor)||'(sem setor)'}</div>
+            <div style="font-size:0.8rem;color:var(--ink-soft);">${d&&mn&&y?`${d}/${mn}/${y}`:'(sem data)'}</div>
+            ${a.produtos.length?`<div style="font-size:0.85rem;margin-top:4px;">${a.produtos.map(escHTML).join(' + ')}</div>`:''}
+            ${a.observacao?`<div style="font-size:0.8rem;color:var(--ink-soft);margin-top:4px;font-style:italic;">${escHTML(a.observacao)}</div>`:''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
+            <button type="button" class="btn-ghost" data-role="editar-ap" data-id="${a.id}" style="padding:6px 10px;font-size:0.75rem;">✎ Editar</button>
+            <button type="button" class="btn-danger-outline" data-role="excluir-ap" data-id="${a.id}" style="padding:6px 10px;font-size:0.75rem;">Excluir</button>
+          </div>
+        </div>
+      </div>`;
+    });
+  }
+  html += `</div>`;
+  app.innerHTML = html;
+
+  document.getElementById('buscaAplicacao').addEventListener('input', e=>{ state.buscaAplicacao = e.target.value; render(); });
+  const btnNova = document.getElementById('btnNovaAplicacao');
+  if(btnNova) btnNova.onclick = ()=>{ state.editandoAplicacaoId = 'nova'; render(); };
+
+  const form = document.getElementById('formAplicacao');
+  if(form){
+    const btnToggleMgr = document.getElementById('btnToggleProdutosManager');
+    if(btnToggleMgr) btnToggleMgr.onclick = ()=>{ state.showProdutosManager = !state.showProdutosManager; render(); };
+    if(state.showProdutosManager){
+      document.getElementById('novoProdutoInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('btnAddProduto').click(); });
+      document.getElementById('btnAddProduto').onclick = ()=>{
+        const inp = document.getElementById('novoProdutoInput');
+        const nome = inp.value.trim();
+        if(!nome) return;
+        state.produtosAplicacao.push({id:uid(), nome});
+        salvarAplicacoesAgora();
+        render();
+      };
+      document.querySelectorAll('[data-role="produto-nome"]').forEach(inp=>{
+        inp.addEventListener('input', e=>{
+          const pid = inp.closest('[data-pid]').dataset.pid;
+          const p = state.produtosAplicacao.find(x=>x.id===pid);
+          if(p){ p.nome = e.target.value; salvarAplicacoesAgora(); }
+        });
+      });
+      document.querySelectorAll('[data-role="produto-rm"]').forEach(btn=>{
+        btn.onclick = ()=>{
+          const pid = btn.closest('[data-pid]').dataset.pid;
+          state.produtosAplicacao = state.produtosAplicacao.filter(x=>x.id!==pid);
+          salvarAplicacoesAgora();
+          render();
+        };
+      });
+    }
+    document.getElementById('btnCancelarAplicacao').onclick = ()=>{ state.editandoAplicacaoId = null; render(); };
+    document.getElementById('btnSalvarAplicacao').onclick = ()=>{
+      const setorVal = document.getElementById('fApSetor').value.trim();
+      if(!setorVal){ showToast('Escolha o setor'); return; }
+      const dataVal = document.getElementById('fApData').value;
+      const produtosVal = [...document.querySelectorAll('[data-role="chk-produto"]:checked')].map(c=>c.value);
+      const obsVal = document.getElementById('fApObs').value;
+      if(state.editandoAplicacaoId==='nova'){
+        state.aplicacoesCacau.push({ id: uid(), setor:setorVal, data:dataVal, produtos:produtosVal, observacao:obsVal });
+      } else {
+        const ap = state.aplicacoesCacau.find(a=>a.id===state.editandoAplicacaoId);
+        if(ap){ ap.setor=setorVal; ap.data=dataVal; ap.produtos=produtosVal; ap.observacao=obsVal; }
+      }
+      state.editandoAplicacaoId = null;
+      salvarAplicacoesAgora();
+      showToast('Aplicação salva');
+      render();
+    };
+  }
+  document.querySelectorAll('[data-role="editar-ap"]').forEach(btn=>{
+    btn.onclick = ()=>{ state.editandoAplicacaoId = btn.dataset.id; render(); };
+  });
+  document.querySelectorAll('[data-role="excluir-ap"]').forEach(btn=>{
+    btn.onclick = ()=>{
+      if(!confirm('Excluir esta aplicação?')) return;
+      state.aplicacoesCacau = state.aplicacoesCacau.filter(a=>a.id!==btn.dataset.id);
+      salvarAplicacoesAgora();
+      render();
+    };
+  });
 }
 
 function resumoSetorModulo(setor, tipo){
@@ -1252,7 +1431,9 @@ function renderModuloList(){
   if(!state.filtroSetorLista) state.filtroSetorLista = 'pendentes';
   const concluidos = todos.filter(s=>setorConcluido(s, m.tipo));
   const pendentes = todos.filter(s=>!setorConcluido(s, m.tipo));
-  const lista = state.filtroSetorLista==='concluidos' ? concluidos : state.filtroSetorLista==='pendentes' ? pendentes : todos;
+  let lista = state.filtroSetorLista==='concluidos' ? concluidos : state.filtroSetorLista==='pendentes' ? pendentes : todos;
+  const busca = (state.buscaSetorLista||'').trim().toLowerCase();
+  if(busca) lista = lista.filter(s=>(s.nome||'').toLowerCase().includes(busca));
 
   let totAval=0, totProb=0;
   todos.forEach(s=>{ const r = resumoSetorModulo(s, m.tipo); totAval+=r.avaliados; totProb+=r.problemas; });
@@ -1272,11 +1453,13 @@ function renderModuloList(){
       <div class="chip ${state.filtroSetorLista==='concluidos'?'active':''}" data-fl="concluidos">Concluídos (${concluidos.length})</div>
       <div class="chip ${state.filtroSetorLista==='todos'?'active':''}" data-fl="todos">Todos (${todos.length})</div>
     </div>
+    <input type="text" id="buscaSetorLista" placeholder="🔎 Buscar setor pelo nome..." value="${escAttr(state.buscaSetorLista||'')}"
+      style="width:100%;border:1.5px solid var(--line);border-radius:8px;padding:9px 10px;font-size:0.9rem;margin:10px 0 14px;box-sizing:border-box;">
   `;
   if(todos.length===0){
     html += `<div class="empty-state"><div class="pod">${m.canto}</div>Nenhum setor de ${m.sub} cadastrado ainda.<br>Toque em "Carregar setores padrão" ou crie um setor manualmente.</div>`;
   } else if(lista.length===0){
-    html += `<div class="empty-state">Nenhum setor ${state.filtroSetorLista==='concluidos'?'concluído':'pendente'} no momento.</div>`;
+    html += `<div class="empty-state">${busca?'Nenhum setor encontrado com esse nome.':'Nenhum setor '+(state.filtroSetorLista==='concluidos'?'concluído':'pendente')+' no momento.'}</div>`;
   } else {
     [...lista].reverse().forEach(s=>{
       const r = resumoSetorModulo(s, m.tipo);
@@ -1304,6 +1487,7 @@ function renderModuloList(){
   app.querySelectorAll('.chip-row .chip').forEach(c=>{
     c.onclick = ()=>{ state.filtroSetorLista = c.dataset.fl; render(); };
   });
+  document.getElementById('buscaSetorLista').addEventListener('input', e=>{ state.buscaSetorLista = e.target.value; render(); });
   document.getElementById('btnNovoSetorMod').onclick = ()=>{
     const s = m.cultura==='coco' ? novoSetorCoco() : novoSetor();
     state.setores.push(s);
@@ -2210,6 +2394,7 @@ function render(){
   if(state.view==='home'){ renderHome(); }
   else if(state.view==='modulo-list'){ renderModuloList(); }
   else if(state.view==='historico'){ renderHistorico(); }
+  else if(state.view==='aplicacoes'){ renderAplicacoes(); }
   else{
     const setor = getSetor(state.setorId);
     if(setor && setor.cultura==='coco') renderSetorCoco(); else renderSetor();
@@ -2226,6 +2411,8 @@ function aplicarConfig(config){
   if(config.webAppUrl) state.webAppUrl = config.webAppUrl;
   if(config.senhaExclusao!==undefined) state.senhaExclusao = config.senhaExclusao;
   if(Array.isArray(config.pragasTipos) && config.pragasTipos.length) state.pragasTipos = config.pragasTipos;
+  if(Array.isArray(config.aplicacoesCacau)) state.aplicacoesCacau = config.aplicacoesCacau;
+  if(Array.isArray(config.produtosAplicacao)) state.produtosAplicacao = config.produtosAplicacao;
 }
 function tentarReconectar(avisar){
   if(reconectando) return reconectando;
@@ -2279,11 +2466,7 @@ document.getElementById('app').innerHTML = '<div class="empty-state">Carregando 
 try{
   const { setores, config, configFalhou, doAparelho } = await carregarTudoDoFirestore();
   state.setores = setores;
-  if(config){
-    if(config.webAppUrl) state.webAppUrl = config.webAppUrl;
-    if(config.senhaExclusao!==undefined) state.senhaExclusao = config.senhaExclusao;
-    if(Array.isArray(config.pragasTipos) && config.pragasTipos.length) state.pragasTipos = config.pragasTipos;
-  }
+  aplicarConfig(config);
   state.configCarregadoOk = !configFalhou;
   migrarSetoresPragas(state.setores);
   if(configFalhou){
