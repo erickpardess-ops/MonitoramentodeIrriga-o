@@ -429,7 +429,7 @@ window.addEventListener('online', ()=>{
 
 
 /* ---------------- STATE ---------------- */
-const APP_VERSION = '3.12';
+const APP_VERSION = '3.13';
 const MODULOS = [
   { id:'irrigacao_cacau', titulo:'Monitoramento de Irrigação', sub:'Cacau', emoji:'💧', canto:'🍫', cor:'#2F4A2C', cultura:'cacau', tipo:'irrigacao' },
   { id:'irrigacao_coco', titulo:'Monitoramento de Irrigação', sub:'Coco', emoji:'💧', canto:'🥥', cor:'#1F5A78', cultura:'coco', tipo:'irrigacao' },
@@ -442,6 +442,7 @@ let state = {
   webAppUrl:'https://script.google.com/macros/s/AKfycby2fY9XUmx0jv0MLQwJoFuefXs2UfjO7zYonZKmdPUhAuqHemnlSGTB9jOAtbjVFJI/exec',
   senhaExclusao:'', configCarregadoOk:false,
   aplicacoesCacau:[], produtosAplicacao:[], buscaSetorLista:'', buscaAplicacao:'',
+  ferti:null, fertiCarregado:false, fertiAlteradoLocal:false, fertiAba:'semana', fertiSemana:null, fertiEditVer:null, fertiFiltroVer:'todos',
   showPragasManager:false, historicoSetorId:null, historicoTipo:null,
   pragasTipos: [
     {id:'p01', nome:'Lagarta (Lepidópteros Spp.)', tipo:'lagarta'},
@@ -1064,7 +1065,8 @@ async function sendToSheets(silencioso){
   if(!state.webAppUrl){ if(!silencioso) showToast('Configure a URL do Google Sheets primeiro'); return; }
   const cacauList = state.setores.filter(s=>s.cultura!=='coco');
   const cocoList = state.setores.filter(s=>s.cultura==='coco');
-  if(cacauList.length===0 && cocoList.length===0){ if(!silencioso) showToast('Nenhum setor cadastrado ainda'); return; }
+  const temFerti = state.ferti && (Object.keys(state.ferti.semanas).length || state.ferti.verificacoes.length || state.ferti.caixas.some(c=>c.ultimaLimpeza));
+  if(cacauList.length===0 && cocoList.length===0 && !temFerti){ if(!silencioso) showToast('Nenhum setor cadastrado ainda'); return; }
   const payload = {
     cacauPontos: buildRowsCacau(cacauList),
     cacauValvulas: buildValvulasCacau(cacauList),
@@ -1078,7 +1080,10 @@ async function sendToSheets(silencioso){
     })),
     cacauIrrigacaoHistorico: buildHistoricoRows(cacauList, 'irrigacao'),
     cacauPragasHistorico: buildHistoricoRows(cacauList, 'pragas'),
-    cocoIrrigacaoHistorico: buildHistoricoRows(cocoList, 'irrigacao')
+    cocoIrrigacaoHistorico: buildHistoricoRows(cocoList, 'irrigacao'),
+    fertiPreparos: state.ferti ? buildFertiPreparos() : [],
+    fertiLimpezas: state.ferti ? buildFertiLimpezas() : [],
+    fertiFiltros: state.ferti ? buildFertiFiltros() : []
   };
   if(!silencioso) showToast('Enviando para o Google Sheets…');
   try{
@@ -1193,6 +1198,10 @@ function renderHeader(){
     row.innerHTML = `<button class="back-link" id="btnBack">← Voltar</button>`;
     sub.innerHTML = `<strong style="color:#fff;font-family:var(--font-body);font-size:0.95rem;">📊 Histórico</strong>`;
     document.getElementById('btnBack').onclick = ()=>{ state.view='modulo-list'; render(); };
+  } else if(state.view==='ferti'){
+    row.innerHTML = `<button class="back-link" id="btnBack">← Início</button>`;
+    sub.innerHTML = `<strong style="color:#fff;font-family:var(--font-body);font-size:0.95rem;">🪣 Fertirrigação — caixas de calda</strong>`;
+    document.getElementById('btnBack').onclick = ()=>{ state.view='home'; state.fertiEditVer=null; render(); };
   } else if(state.view==='aplicacoes'){
     row.innerHTML = `<button class="back-link" id="btnBack">← Início</button>`;
     sub.innerHTML = `<strong style="color:#fff;font-family:var(--font-body);font-size:0.95rem;">🧪 Aplicações — Cacau</strong>`;
@@ -1212,6 +1221,23 @@ function openMenu(){
 }
 
 /* ---------------- RENDER: HOME (HUB DE MÓDULOS) ---------------- */
+function fertiTileHTML(){
+  const r = resumoSemanaFerti(segundaDaSemana(hojeISO()));
+  const alertas = alertasLimpeza().filter(c=>statusLimpeza(c).tipo!=='sem').length;
+  return `
+      <div class="modulo-tile" id="tileFerti" style="background:#3B6E8F;position:relative;">
+        ${alertas?`<span style="position:absolute;top:8px;right:8px;background:#fff;color:var(--danger);border-radius:12px;padding:2px 7px;font-size:0.7rem;font-weight:800;">⚠️ ${alertas}</span>`:''}
+        <div class="modulo-emoji">🪣<span class="modulo-canto">💧</span></div>
+        <div class="modulo-titulo">Fertirrigação</div>
+        <div class="modulo-sub">${r.feitas}/${r.previstas} caixas na semana</div>
+      </div>`;
+}
+function abrirFerti(){
+  state.view='ferti'; state.fertiSemana = segundaDaSemana(hojeISO()); render();
+  // traz o que outro aparelho registrou (sem atrapalhar o que está sendo digitado)
+  carregarFerti().then(ok=>{ if(ok && state.view==='ferti' && !state.fertiEditVer) renderMantendoScroll(); });
+}
+
 function renderHome(){
   const app = document.getElementById('app');
   const html = `
@@ -1222,6 +1248,7 @@ function renderHome(){
         <div class="modulo-titulo">${m.titulo}</div>
         <div class="modulo-sub">${m.sub}</div>
       </div>`).join('')}
+      ${fertiTileHTML()}
     </div>
     <div style="font-size:0.72rem;color:var(--ink-soft);text-align:center;margin:-6px 0 4px;">☁️ Salvo automaticamente — sincroniza sozinho com o Google Sheets</div>
     <div style="font-size:0.72rem;text-align:center;margin:0 0 14px;color:${!state.configCarregadoOk?'var(--danger)':(state.senhaExclusao?'var(--ok)':'var(--ink-soft)')};">
@@ -1240,6 +1267,7 @@ function renderHome(){
   app.querySelectorAll('.modulo-tile').forEach(t=>{
     t.onclick = ()=>{ state.modulo = t.dataset.mod; state.view='modulo-list'; render(); };
   });
+  document.getElementById('tileFerti').onclick = abrirFerti;
   document.getElementById('btnAplicacoes').onclick = ()=>{ state.view='aplicacoes'; render(); };
   document.getElementById('btnExpCSV').onclick = exportCSV;
   document.getElementById('btnSenhaExclusao').onclick = async ()=>{ await garantirConfigAgora(); configurarSenhaExclusao(); };
@@ -2384,6 +2412,605 @@ function wirePontoEventsCoco(v, onlyN){
   });
 }
 
+/* ---------------- FERTIRRIGAÇÃO (CAIXAS, LIMPEZA E FILTROS) ----------------
+   Tudo fica no Firestore dentro da coleção "config" (mesma das aplicações):
+   - config/ferti            → caixas (receita, dias de preparo, limpezas), filtros, preparos por semana
+                               e as verificações de filtro (só texto).
+   - config/fertiFoto_<id>   → fotos de cada verificação de filtro (carregadas só quando você abre). */
+const DIAS_SEMANA = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+const DIAS_CURTO = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+const ORDEM_DIAS = [1,2,3,4,5,6,0]; // semana começa na segunda
+const LIMPEZA_DIAS = 60;           // limpeza das caixas a cada 60 dias
+const LIMPEZA_AVISO_DIAS = 7;      // avisa quando faltar 7 dias ou menos
+const NIVEL_FILTRO = {
+  pouco:   { rotulo:'Pouco sujo',  cor:'var(--ok)',     fundo:'var(--ok-bg)' },
+  mediano: { rotulo:'Mediano',     cor:'var(--gold)',   fundo:'#F3E7CC' },
+  muito:   { rotulo:'Muito sujo',  cor:'var(--danger)', fundo:'var(--danger-bg)' }
+};
+const FOTOS_FILTRO_MAX = 3;
+
+function fertiPadrao(){
+  // Receita e escala de preparo da planilha "Imprimir caixas" (dia: nº de caixas preparadas).
+  const cx = (id, volume, adubos, dias)=>({ id, volume, adubos: adubos.map(([nome,kg])=>({nome,kg})), dias, ultimaLimpeza:'', limpezas:[] });
+  return {
+    caixas: [
+      cx('A', 400, [['Iron Complex',4],['Sulfato de Magnésio',125]],                                   {2:4, 5:5}),
+      cx('B', 400, [['Ácido bórico',6],['MAP Purificado',50]],                                         {2:3, 4:4}),
+      cx('C', 400, [['Nitrato de Cálcio',75]],                                                         {2:5, 3:1, 4:5, 6:2}),
+      cx('D', 300, [['Sulfato de Cobre',4.4],['Sulfato de Zinco',18],['Sulfato Manganês',18],['Uréia',45.9]], {3:6, 4:2}),
+      cx('E', 300, [['Iron Complex',1.8],['MAP Purificado',21],['Uréia',26.9]],                        {1:4, 3:3}),
+      cx('F', 300, [['Cloreto de Potássio',50]],                                                       {1:6, 2:4, 3:4, 4:2, 5:4})
+    ],
+    filtros: [{ id:'f1', nome:'Filtro 1' }],
+    semanas: {},      // { 'AAAA-MM-DD' (segunda): { A: { '2': feitas, ... }, ... } }
+    verificacoes: []  // { id, data, filtroId, nivel, comentario, qtdFotos }
+  };
+}
+
+/* datas no fuso do aparelho (não em UTC, senão à noite vira o dia seguinte) */
+function isoLocal(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function hojeISO(){ return isoLocal(new Date()); }
+function dataDeISO(s){ const [y,m,d] = (s||'').split('-').map(Number); return new Date(y, (m||1)-1, d||1); }
+function somaDias(iso, n){ const d = dataDeISO(iso); d.setDate(d.getDate()+n); return isoLocal(d); }
+function difDias(isoA, isoB){ return Math.round((dataDeISO(isoA) - dataDeISO(isoB)) / 86400000); }
+function segundaDaSemana(iso){ const d = dataDeISO(iso); const dow = d.getDay(); d.setDate(d.getDate() - (dow===0 ? 6 : dow-1)); return isoLocal(d); }
+function dataDoDia(segunda, dow){ return somaDias(segunda, dow===0 ? 6 : dow-1); }
+function fmtBR(iso){ if(!iso) return '—'; const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`; }
+function fmtCurto(iso){ const [, m, d] = iso.split('-'); return `${d}/${m}`; }
+function fmtKg(n){ return String(n).replace('.', ','); }
+
+function fertiCaixa(id){ return state.ferti.caixas.find(c=>c.id===id); }
+function feitasNoDia(segunda, caixaId, dow){
+  const s = state.ferti.semanas[segunda]; return (s && s[caixaId] && Number(s[caixaId][dow])) || 0;
+}
+function definirFeitas(segunda, caixaId, dow, n){
+  const sem = state.ferti.semanas[segunda] = state.ferti.semanas[segunda] || {};
+  const cx = sem[caixaId] = sem[caixaId] || {};
+  if(n>0) cx[dow] = n; else delete cx[dow];
+  if(!Object.keys(cx).length) delete sem[caixaId];
+  if(!Object.keys(sem).length) delete state.ferti.semanas[segunda];
+}
+
+/** Situação de um preparo previsto: ok / atrasado / hoje / previsto. */
+function statusPreparo(prev, feitas, dataISO){
+  if(feitas >= prev) return 'ok';
+  const hoje = hojeISO();
+  if(dataISO < hoje) return 'atrasado';
+  if(dataISO === hoje) return 'hoje';
+  return 'previsto';
+}
+function resumoSemanaFerti(segunda){
+  let previstas=0, feitas=0, atrasadas=0, pendentes=0;
+  const porCaixa = {};
+  state.ferti.caixas.forEach(c=>{
+    let p=0, f=0;
+    ORDEM_DIAS.forEach(dow=>{
+      const prev = Number(c.dias[dow])||0;
+      const fe = feitasNoDia(segunda, c.id, dow);
+      if(!prev && !fe) return;
+      p += prev; f += fe;
+      const falta = Math.max(0, prev-fe);
+      if(falta){ if(dataDoDia(segunda, dow) < hojeISO()) atrasadas += falta; else pendentes += falta; }
+    });
+    porCaixa[c.id] = { previstas:p, feitas:f };
+    previstas += p; feitas += f;
+  });
+  return { previstas, feitas, atrasadas, pendentes, porCaixa };
+}
+
+/** Limpeza: próxima = última + 60 dias; alerta quando faltam 7 dias ou menos. */
+function statusLimpeza(c){
+  if(!c.ultimaLimpeza) return { tipo:'sem', texto:'Sem limpeza registrada', proxima:'' };
+  const proxima = somaDias(c.ultimaLimpeza, LIMPEZA_DIAS);
+  const faltam = difDias(proxima, hojeISO());
+  if(faltam < 0) return { tipo:'atrasada', texto:`Atrasada há ${-faltam} dia(s)`, proxima, faltam };
+  if(faltam === 0) return { tipo:'vence', texto:'Vence hoje', proxima, faltam };
+  if(faltam <= LIMPEZA_AVISO_DIAS) return { tipo:'vence', texto:`Vence em ${faltam} dia(s)`, proxima, faltam };
+  return { tipo:'ok', texto:`Faltam ${faltam} dias`, proxima, faltam };
+}
+function alertasLimpeza(){ return state.ferti.caixas.filter(c=>['atrasada','vence','sem'].includes(statusLimpeza(c).tipo)); }
+function badgeLimpezaHTML(st){
+  if(st.tipo==='ok') return `<span class="badge ok">✓ ${st.texto}</span>`;
+  if(st.tipo==='vence') return `<span class="badge dupla">⚠️ ${st.texto}</span>`;
+  if(st.tipo==='atrasada') return `<span class="badge danger">⛔ ${st.texto}</span>`;
+  return `<span class="badge pending">${st.texto}</span>`;
+}
+
+/* ---------- Firestore ---------- */
+function fertiParaFirestore(){ return JSON.parse(JSON.stringify(state.ferti)); }
+async function salvarFertiFirestore(){
+  try{ await setDoc(doc(db,'config','ferti'), fertiParaFirestore()); }
+  catch(e){ console.error('Falha ao salvar fertirrigação no Firestore:', e); }
+}
+let timerSalvarFerti = null;
+function agendarSalvarFerti(){
+  state.fertiAlteradoLocal = true;
+  clearTimeout(timerSalvarFerti);
+  timerSalvarFerti = setTimeout(async ()=>{ await salvarFertiFirestore(); state.fertiAlteradoLocal = false; }, 800);
+  agendarAutoSyncSheets();
+}
+function aplicarFerti(dados){
+  const base = fertiPadrao();
+  if(!dados) { state.ferti = base; return; }
+  state.ferti = {
+    caixas: Array.isArray(dados.caixas) && dados.caixas.length ? dados.caixas : base.caixas,
+    filtros: Array.isArray(dados.filtros) && dados.filtros.length ? dados.filtros : base.filtros,
+    semanas: dados.semanas || {},
+    verificacoes: Array.isArray(dados.verificacoes) ? dados.verificacoes : []
+  };
+  state.ferti.caixas.forEach(c=>{ c.dias = c.dias||{}; c.adubos = c.adubos||[]; c.limpezas = c.limpezas||[]; c.ultimaLimpeza = c.ultimaLimpeza||''; });
+}
+/** Carrega do Firebase (ou da cópia do aparelho, sem internet). */
+async function carregarFerti(){
+  try{
+    let d;
+    try{ d = await comPrazo(getDoc(doc(db,'config','ferti')), 8000); }
+    catch(e){ d = await getDocFromCache(doc(db,'config','ferti')); }
+    if(state.fertiAlteradoLocal) return true; // não sobrescreve o que acabou de ser digitado
+    aplicarFerti(d.exists() ? d.data() : null);
+    state.fertiCarregado = true;
+    return true;
+  }catch(e){
+    console.warn('Fertirrigação: ainda sem dados do Firebase', e);
+    if(!state.ferti) aplicarFerti(null);
+    return false;
+  }
+}
+const cacheFotosFiltro = {};
+async function carregarFotosVerificacao(id){
+  if(cacheFotosFiltro[id]) return cacheFotosFiltro[id];
+  let d;
+  try{ d = await comPrazo(getDoc(doc(db,'config','fertiFoto_'+id)), 10000); }
+  catch(e){ d = await getDocFromCache(doc(db,'config','fertiFoto_'+id)); }
+  const fotos = d.exists() ? (d.data().fotos||[]) : [];
+  cacheFotosFiltro[id] = fotos;
+  return fotos;
+}
+async function salvarFotosVerificacao(id, fotos){
+  cacheFotosFiltro[id] = fotos.slice();
+  try{
+    if(fotos.length) await setDoc(doc(db,'config','fertiFoto_'+id), { fotos });
+    else await deleteDoc(doc(db,'config','fertiFoto_'+id));
+  }catch(e){ console.error('Falha ao salvar fotos do filtro:', e); }
+}
+
+/* ---------- Linhas para o Google Sheets ---------- */
+function buildFertiPreparos(){
+  const rows = [];
+  Object.keys(state.ferti.semanas).sort().forEach(seg=>{
+    state.ferti.caixas.forEach(c=>{
+      ORDEM_DIAS.forEach(dow=>{
+        const prev = Number(c.dias[dow])||0, fe = feitasNoDia(seg, c.id, dow);
+        if(!prev && !fe) return;
+        const data = dataDoDia(seg, dow);
+        const st = statusPreparo(prev, fe, data);
+        rows.push({ Semana: seg, Data: data, Dia: DIAS_SEMANA[dow], Caixa: c.id, Previstas: prev, Preparadas: fe,
+          Situacao: st==='ok'?'Preparada':(st==='atrasado'?'Atrasada':'Pendente') });
+      });
+    });
+  });
+  return rows;
+}
+function buildFertiLimpezas(){
+  const rows = [];
+  state.ferti.caixas.forEach(c=>{
+    const st = statusLimpeza(c);
+    rows.push({ Caixa: c.id, UltimaLimpeza: c.ultimaLimpeza||'', ProximaLimpeza: st.proxima||'', Situacao: st.texto });
+  });
+  return rows;
+}
+function buildFertiFiltros(){
+  return state.ferti.verificacoes.map(v=>{
+    const f = state.ferti.filtros.find(x=>x.id===v.filtroId);
+    return { Id: v.id, Data: v.data, Filtro: f ? f.nome : '', Nivel: (NIVEL_FILTRO[v.nivel]||{}).rotulo || '', Comentario: v.comentario||'', Fotos: v.qtdFotos||0 };
+  });
+}
+
+/* ---------- Tela ---------- */
+function renderFerti(){
+  const app = document.getElementById('app');
+  const aba = state.fertiAba || 'semana';
+  const alertas = alertasLimpeza().filter(c=>statusLimpeza(c).tipo!=='sem').length;
+  let html = `
+    <div class="tabs">
+      <div class="tab ${aba==='semana'?'active':''}" data-aba="semana">📅 Semana</div>
+      <div class="tab ${aba==='limpeza'?'active':''}" data-aba="limpeza">🧽 Limpeza${alertas?` (${alertas})`:''}</div>
+      <div class="tab ${aba==='filtros'?'active':''}" data-aba="filtros">🔍 Filtros</div>
+      <div class="tab ${aba==='caixas'?'active':''}" data-aba="caixas">⚙️ Caixas</div>
+    </div>`;
+  if(aba==='semana') html += fertiSemanaHTML();
+  else if(aba==='limpeza') html += fertiLimpezaHTML();
+  else if(aba==='filtros') html += fertiFiltrosHTML();
+  else html += fertiCaixasHTML();
+  app.innerHTML = html;
+  app.querySelectorAll('.tab[data-aba]').forEach(t=>{ t.onclick = ()=>{ state.fertiAba = t.dataset.aba; render(); }; });
+  if(aba==='semana') wireFertiSemana();
+  else if(aba==='limpeza') wireFertiLimpeza();
+  else if(aba==='filtros') wireFertiFiltros();
+  else wireFertiCaixas();
+}
+
+/* ----- Semana: caixas preparadas x previstas ----- */
+function fertiSemanaHTML(){
+  const seg = state.fertiSemana || segundaDaSemana(hojeISO());
+  state.fertiSemana = seg;
+  const r = resumoSemanaFerti(seg);
+  const hoje = hojeISO();
+  const ehSemanaAtual = seg === segundaDaSemana(hoje);
+  let html = `
+    <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;">
+      <button type="button" class="btn-ghost" id="fsAnt">◀</button>
+      <div style="text-align:center;">
+        <div style="font-weight:800;">Semana ${fmtCurto(seg)} a ${fmtCurto(somaDias(seg,6))}</div>
+        ${ehSemanaAtual ? '<div style="font-size:0.72rem;color:var(--ok);font-weight:700;">semana atual</div>' : '<button type="button" class="btn-ghost" id="fsHoje" style="padding:3px 8px;font-size:0.7rem;margin-top:3px;">ir para esta semana</button>'}
+      </div>
+      <button type="button" class="btn-ghost" id="fsProx">▶</button>
+    </div>
+    <div class="stat-row">
+      <div class="stat"><div class="num">${r.feitas}/${r.previstas}</div><div class="lbl">Preparadas</div></div>
+      <div class="stat"><div class="num" style="color:var(--pending);">${r.pendentes}</div><div class="lbl">Pendentes</div></div>
+      <div class="stat"><div class="num" style="color:${r.atrasadas?'var(--danger)':'var(--ok)'};">${r.atrasadas}</div><div class="lbl">Atrasadas</div></div>
+    </div>
+    <div class="card" style="padding:10px 12px;">
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;text-align:center;">
+        ${state.ferti.caixas.map(c=>{
+          const pc = r.porCaixa[c.id]; const ok = pc.previstas && pc.feitas>=pc.previstas;
+          return `<div style="border-radius:8px;padding:6px 2px;background:${ok?'var(--ok-bg)':'var(--surface-2)'};">
+            <div style="font-weight:800;">${escHTML(c.id)}</div>
+            <div style="font-family:var(--font-mono);font-size:0.75rem;color:${ok?'var(--ok)':'var(--ink-soft)'};">${pc.feitas}/${pc.previstas}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  ORDEM_DIAS.forEach(dow=>{
+    const data = dataDoDia(seg, dow);
+    const itens = state.ferti.caixas.filter(c=>(Number(c.dias[dow])||0) > 0 || feitasNoDia(seg, c.id, dow) > 0);
+    if(!itens.length) return;
+    html += `<div class="section-title">${DIAS_SEMANA[dow]} · ${fmtCurto(data)}${data===hoje?' · HOJE':''}<span class="rule"></span></div>
+      <div class="card" style="padding:4px 14px;">`;
+    itens.forEach(c=>{
+      const prev = Number(c.dias[dow])||0, fe = feitasNoDia(seg, c.id, dow);
+      const st = statusPreparo(prev, fe, data);
+      const badge = st==='ok' ? `<span class="badge ok">✓ preparada${fe>prev?` (+${fe-prev} extra)`:''}</span>`
+        : st==='atrasado' ? `<span class="badge danger">⛔ atrasada · falta ${prev-fe}</span>`
+        : st==='hoje' ? `<span class="badge dupla">hoje · falta ${prev-fe}</span>`
+        : `<span class="badge pending">prevista</span>`;
+      html += `
+        <div class="row-item" data-cx="${escAttr(c.id)}" data-dow="${dow}">
+          <div class="lbl">Caixa ${escHTML(c.id)} <span style="font-weight:400;color:var(--ink-soft);">· ${c.volume} L · previstas ${prev}</span>
+            <span class="sub">${c.adubos.map(a=>`${escHTML(a.nome)} ${fmtKg(a.kg)} kg`).join(' + ')}</span>
+            <div style="margin-top:4px;">${badge}</div>
+          </div>
+          <div class="stepper">
+            <button type="button" data-role="fs-menos">−</button>
+            <div class="val">${fe}</div>
+            <button type="button" data-role="fs-mais">+</button>
+          </div>
+        </div>`;
+    });
+    html += `</div>`;
+  });
+  html += `<div style="font-size:0.72rem;color:var(--ink-soft);text-align:center;margin-top:6px;">Use o + a cada caixa preparada. A escala (dias e quantidades) é ajustada na aba ⚙️ Caixas.</div>`;
+  return html;
+}
+function wireFertiSemana(){
+  document.getElementById('fsAnt').onclick = ()=>{ state.fertiSemana = somaDias(state.fertiSemana, -7); render(); };
+  document.getElementById('fsProx').onclick = ()=>{ state.fertiSemana = somaDias(state.fertiSemana, 7); render(); };
+  const bh = document.getElementById('fsHoje'); if(bh) bh.onclick = ()=>{ state.fertiSemana = segundaDaSemana(hojeISO()); render(); };
+  document.querySelectorAll('.row-item[data-cx]').forEach(row=>{
+    const cx = row.dataset.cx, dow = row.dataset.dow;
+    const mudar = (delta)=>{
+      const atual = feitasNoDia(state.fertiSemana, cx, dow);
+      definirFeitas(state.fertiSemana, cx, dow, Math.max(0, atual+delta));
+      agendarSalvarFerti();
+      renderMantendoScroll();
+    };
+    row.querySelector('[data-role="fs-menos"]').onclick = ()=>mudar(-1);
+    row.querySelector('[data-role="fs-mais"]').onclick = ()=>mudar(1);
+  });
+}
+
+/* ----- Limpeza das caixas (a cada 60 dias) ----- */
+function fertiLimpezaHTML(){
+  const hoje = hojeISO();
+  const atrasadas = state.ferti.caixas.filter(c=>statusLimpeza(c).tipo==='atrasada').map(c=>c.id);
+  const vencendo = state.ferti.caixas.filter(c=>statusLimpeza(c).tipo==='vence').map(c=>c.id);
+  let html = '';
+  if(atrasadas.length) html += `<div class="card" style="background:var(--danger-bg);border-color:var(--danger);color:var(--danger);font-weight:700;">⛔ Limpeza atrasada: caixa(s) ${atrasadas.join(', ')}</div>`;
+  if(vencendo.length) html += `<div class="card" style="background:#F3E7CC;border-color:var(--gold);color:#7A5A1E;font-weight:700;">⚠️ Limpeza vencendo nos próximos ${LIMPEZA_AVISO_DIAS} dias: caixa(s) ${vencendo.join(', ')}</div>`;
+  state.ferti.caixas.forEach(c=>{
+    const st = statusLimpeza(c);
+    html += `
+      <div class="card" data-limpeza="${escAttr(c.id)}">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
+          <div style="font-weight:800;font-size:1.05rem;">Caixa ${escHTML(c.id)} <span style="font-weight:400;font-size:0.8rem;color:var(--ink-soft);">· ${c.volume} L</span></div>
+          ${badgeLimpezaHTML(st)}
+        </div>
+        <div class="grid-2" style="font-size:0.82rem;margin-bottom:10px;">
+          <div><span style="color:var(--ink-soft);">Última limpeza</span><br><strong>${fmtBR(c.ultimaLimpeza)}</strong></div>
+          <div><span style="color:var(--ink-soft);">Próxima limpeza</span><br><strong>${fmtBR(st.proxima)}</strong></div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input type="date" data-role="lp-data" value="${hoje}" max="${hoje}" style="flex:1;min-width:140px;border:1.5px solid var(--line);border-radius:8px;padding:8px 10px;font-size:0.9rem;">
+          <button type="button" class="btn-secondary" data-role="lp-registrar">🧽 Registrar limpeza</button>
+        </div>
+        ${c.limpezas.length ? `
+          <details style="margin-top:10px;font-size:0.8rem;">
+            <summary style="color:var(--ink-soft);cursor:pointer;">Histórico (${c.limpezas.length})</summary>
+            ${c.limpezas.slice().sort((a,b)=>b.data<a.data?-1:1).map(l=>`
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid var(--line);">
+                <span>${fmtBR(l.data)}</span>
+                <button type="button" class="btn-ghost" data-role="lp-rm" data-data="${l.data}" style="padding:3px 8px;font-size:0.7rem;">remover</button>
+              </div>`).join('')}
+          </details>` : ''}
+      </div>`;
+  });
+  html += `<div style="font-size:0.72rem;color:var(--ink-soft);text-align:center;">Próxima limpeza = última + ${LIMPEZA_DIAS} dias. Alerta a partir de ${LIMPEZA_AVISO_DIAS} dias antes.</div>`;
+  return html;
+}
+function recalcularUltimaLimpeza(c){
+  c.ultimaLimpeza = c.limpezas.reduce((m,l)=> l.data>m ? l.data : m, '');
+}
+function wireFertiLimpeza(){
+  document.querySelectorAll('[data-limpeza]').forEach(card=>{
+    const c = fertiCaixa(card.dataset.limpeza);
+    card.querySelector('[data-role="lp-registrar"]').onclick = ()=>{
+      const data = card.querySelector('[data-role="lp-data"]').value;
+      if(!data){ showToast('Escolha a data da limpeza'); return; }
+      if(!c.limpezas.some(l=>l.data===data)) c.limpezas.push({ data });
+      recalcularUltimaLimpeza(c);
+      agendarSalvarFerti();
+      showToast(`Limpeza da caixa ${c.id} registrada em ${fmtBR(data)}`);
+      render();
+    };
+    card.querySelectorAll('[data-role="lp-rm"]').forEach(btn=>{
+      btn.onclick = ()=>{
+        if(!confirm(`Remover a limpeza de ${fmtBR(btn.dataset.data)} da caixa ${c.id}?`)) return;
+        c.limpezas = c.limpezas.filter(l=>l.data!==btn.dataset.data);
+        recalcularUltimaLimpeza(c);
+        agendarSalvarFerti();
+        renderMantendoScroll();
+      };
+    });
+  });
+}
+
+/* ----- Filtros: verificação semanal ----- */
+function fertiFiltrosHTML(){
+  const segAtual = segundaDaSemana(hojeISO());
+  const filtroSel = state.fertiFiltroVer || 'todos';
+  let html = `<div class="card" style="padding:10px 14px;">
+    <div style="font-size:0.72rem;font-weight:700;color:var(--ink-soft);text-transform:uppercase;margin-bottom:6px;">Esta semana (${fmtCurto(segAtual)} a ${fmtCurto(somaDias(segAtual,6))})</div>
+    ${state.ferti.filtros.map(f=>{
+      const v = state.ferti.verificacoes.filter(x=>x.filtroId===f.id && x.data>=segAtual && x.data<=somaDias(segAtual,6)).sort((a,b)=>b.data<a.data?-1:1)[0];
+      const n = v && NIVEL_FILTRO[v.nivel];
+      return `<div class="row-item"><div class="lbl">${escHTML(f.nome)}</div>
+        ${v ? `<span class="badge" style="background:${n?n.fundo:'var(--ok-bg)'};color:${n?n.cor:'var(--ok)'};">✓ ${fmtCurto(v.data)} · ${n?n.rotulo:'verificado'}</span>` : '<span class="badge danger">pendente</span>'}
+      </div>`;
+    }).join('')}
+  </div>`;
+  if(state.fertiEditVer){
+    html += fertiVerificacaoFormHTML(state.fertiEditVer);
+  } else {
+    html += `<button class="btn-primary" id="btnNovaVerif" style="margin-bottom:14px;">+ Nova verificação de filtro</button>`;
+  }
+  html += `<div class="chip-row">
+    <div class="chip ${filtroSel==='todos'?'active':''}" data-fv="todos">Todos</div>
+    ${state.ferti.filtros.map(f=>`<div class="chip ${filtroSel===f.id?'active':''}" data-fv="${escAttr(f.id)}">${escHTML(f.nome)}</div>`).join('')}
+  </div>`;
+  const lista = state.ferti.verificacoes.filter(v=>filtroSel==='todos' || v.filtroId===filtroSel).sort((a,b)=> b.data<a.data?-1:(b.data>a.data?1:0));
+  if(!lista.length) html += `<div class="empty-state">Nenhuma verificação registrada ainda.</div>`;
+  lista.forEach(v=>{
+    const f = state.ferti.filtros.find(x=>x.id===v.filtroId);
+    const n = NIVEL_FILTRO[v.nivel];
+    html += `
+      <div class="card" data-ver="${escAttr(v.id)}" style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+          <div>
+            <div style="font-weight:800;">${escHTML(f?f.nome:'(filtro removido)')} · ${fmtBR(v.data)}</div>
+            ${n?`<span class="badge" style="background:${n.fundo};color:${n.cor};margin-top:4px;">${n.rotulo}</span>`:''}
+            ${v.comentario?`<div style="font-size:0.82rem;margin-top:6px;white-space:pre-wrap;">${escHTML(v.comentario)}</div>`:''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
+            <button type="button" class="btn-ghost" data-role="ver-editar" style="padding:6px 10px;font-size:0.75rem;">✎ Editar</button>
+            <button type="button" class="btn-danger-outline" data-role="ver-excluir" style="padding:6px 10px;font-size:0.75rem;">Excluir</button>
+          </div>
+        </div>
+        ${v.qtdFotos ? `<div class="photo-thumbs" data-role="ver-fotos">${cacheFotosFiltro[v.id]
+            ? cacheFotosFiltro[v.id].map((src,i)=>`<div class="photo-thumb" data-idx="${i}"><img src="${src}"></div>`).join('')
+            : `<button type="button" class="btn-ghost" data-role="ver-carregar-fotos" style="font-size:0.75rem;">📷 Ver ${v.qtdFotos} foto(s)</button>`}</div>` : ''}
+      </div>`;
+  });
+  return html;
+}
+function fertiVerificacaoFormHTML(ed){
+  return `
+  <div class="card" id="formVerif" style="border-color:var(--forest);">
+    <div class="field-row"><label>Filtro</label>
+      <select id="fvFiltro">${state.ferti.filtros.map(f=>`<option value="${escAttr(f.id)}" ${ed.filtroId===f.id?'selected':''}>${escHTML(f.nome)}</option>`).join('')}</select>
+    </div>
+    <div class="field-row"><label>Data da verificação</label><input type="date" id="fvData" value="${escAttr(ed.data)}"></div>
+    <div class="field-row"><label>Nível de sujidade</label>
+      <div class="chip-row" style="margin:0;">
+        ${Object.entries(NIVEL_FILTRO).map(([k,n])=>`<div class="chip" data-nivel="${k}" style="${ed.nivel===k?`background:${n.cor};border-color:${n.cor};color:#fff;`:''}">${n.rotulo}</div>`).join('')}
+      </div>
+    </div>
+    <div class="field-row"><label>Fotos do filtro (até ${FOTOS_FILTRO_MAX})</label>
+      <button type="button" class="photo-add-btn" id="fvAddFoto" ${ed.fotos.length>=FOTOS_FILTRO_MAX?'disabled':''}>📷 Adicionar foto (${ed.fotos.length}/${FOTOS_FILTRO_MAX})</button>
+      <input type="file" id="fvFotoInput" accept="image/*" capture="environment" multiple style="display:none;">
+      <div class="photo-thumbs">${ed.fotos.map((src,i)=>`<div class="photo-thumb" data-idx="${i}"><img src="${src}"><button type="button" class="rm" data-role="fv-foto-rm">✕</button></div>`).join('')}</div>
+    </div>
+    <div class="field-row"><label>Comentários</label><textarea id="fvComentario" placeholder="Ex.: muita areia, lavado no local, trocar elemento...">${escHTML(ed.comentario)}</textarea></div>
+    <div style="display:flex;gap:8px;">
+      <button type="button" class="btn-primary" id="fvSalvar" style="flex:1;">Salvar verificação</button>
+      <button type="button" class="btn-ghost" id="fvCancelar">Cancelar</button>
+    </div>
+  </div>`;
+}
+function wireFertiFiltros(){
+  const btnNova = document.getElementById('btnNovaVerif');
+  if(btnNova) btnNova.onclick = ()=>{
+    state.fertiEditVer = { id:null, filtroId: state.ferti.filtros[0].id, data: hojeISO(), nivel:'', comentario:'', fotos:[] };
+    render();
+  };
+  document.querySelectorAll('[data-fv]').forEach(ch=>{ ch.onclick = ()=>{ state.fertiFiltroVer = ch.dataset.fv; render(); }; });
+
+  const form = document.getElementById('formVerif');
+  if(form){
+    const ed = state.fertiEditVer;
+    const lerCampos = ()=>{
+      ed.filtroId = document.getElementById('fvFiltro').value;
+      ed.data = document.getElementById('fvData').value;
+      ed.comentario = document.getElementById('fvComentario').value;
+    };
+    form.querySelectorAll('[data-nivel]').forEach(ch=>{ ch.onclick = ()=>{ lerCampos(); ed.nivel = ch.dataset.nivel; render(); }; });
+    const input = document.getElementById('fvFotoInput');
+    document.getElementById('fvAddFoto').onclick = ()=>input.click();
+    input.addEventListener('change', async e=>{
+      lerCampos();
+      const files = [...e.target.files];
+      if(!files.length) return;
+      showToast('Processando foto...');
+      for(const f of files){
+        if(ed.fotos.length >= FOTOS_FILTRO_MAX) break;
+        try{ ed.fotos.push(await compressImage(f, 900, 0.6)); }catch(err){}
+      }
+      render();
+    });
+    form.querySelectorAll('.photo-thumb').forEach(th=>{
+      const i = Number(th.dataset.idx);
+      th.querySelector('img').onclick = ()=>openLightbox(ed.fotos[i]);
+      th.querySelector('[data-role="fv-foto-rm"]').onclick = ()=>{ lerCampos(); ed.fotos.splice(i,1); render(); };
+    });
+    document.getElementById('fvCancelar').onclick = ()=>{ state.fertiEditVer = null; render(); };
+    document.getElementById('fvSalvar').onclick = ()=>{
+      lerCampos();
+      if(!ed.data){ showToast('Informe a data'); return; }
+      if(!ed.nivel){ showToast('Escolha o nível de sujidade'); return; }
+      const id = ed.id || uid();
+      const registro = { id, data: ed.data, filtroId: ed.filtroId, nivel: ed.nivel, comentario: ed.comentario, qtdFotos: ed.fotos.length };
+      const i = state.ferti.verificacoes.findIndex(v=>v.id===id);
+      if(i>=0) state.ferti.verificacoes[i] = registro; else state.ferti.verificacoes.push(registro);
+      salvarFotosVerificacao(id, ed.fotos);
+      agendarSalvarFerti();
+      state.fertiEditVer = null;
+      showToast('Verificação salva');
+      render();
+    };
+  }
+
+  document.querySelectorAll('[data-ver]').forEach(card=>{
+    const v = state.ferti.verificacoes.find(x=>x.id===card.dataset.ver);
+    if(!v) return;
+    const btnFotos = card.querySelector('[data-role="ver-carregar-fotos"]');
+    if(btnFotos) btnFotos.onclick = async ()=>{
+      btnFotos.textContent = 'Carregando…';
+      try{ await carregarFotosVerificacao(v.id); render(); }
+      catch(e){ btnFotos.textContent = 'Sem internet — tente de novo'; }
+    };
+    card.querySelectorAll('[data-role="ver-fotos"] .photo-thumb img').forEach((img,i)=>{
+      img.onclick = ()=>openLightbox(cacheFotosFiltro[v.id][i]);
+    });
+    card.querySelector('[data-role="ver-editar"]').onclick = async ()=>{
+      let fotos = [];
+      if(v.qtdFotos){
+        try{ fotos = (await carregarFotosVerificacao(v.id)).slice(); }
+        catch(e){ showToast('Sem internet para abrir as fotos — tente de novo'); return; }
+      }
+      state.fertiEditVer = { id:v.id, filtroId:v.filtroId, data:v.data, nivel:v.nivel, comentario:v.comentario||'', fotos };
+      render();
+    };
+    card.querySelector('[data-role="ver-excluir"]').onclick = ()=>{
+      if(!confirm(`Excluir a verificação de ${fmtBR(v.data)}?`)) return;
+      state.ferti.verificacoes = state.ferti.verificacoes.filter(x=>x.id!==v.id);
+      if(v.qtdFotos) salvarFotosVerificacao(v.id, []);
+      agendarSalvarFerti();
+      render();
+    };
+  });
+}
+
+/* ----- Caixas: receita, volume, escala de preparo e filtros cadastrados ----- */
+function fertiCaixasHTML(){
+  let html = '';
+  state.ferti.caixas.forEach(c=>{
+    const total = ORDEM_DIAS.reduce((s,d)=>s+(Number(c.dias[d])||0),0);
+    html += `
+      <div class="card" data-cfg="${escAttr(c.id)}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <div style="font-weight:800;font-size:1.05rem;">Caixa ${escHTML(c.id)}</div>
+          <span class="badge pending">${total} preparo(s)/semana</span>
+        </div>
+        <div class="field-row"><label>Volume (L)</label><input type="number" inputmode="decimal" data-role="cfg-vol" value="${c.volume}"></div>
+        <label style="font-size:0.72rem;font-weight:700;color:var(--ink-soft);text-transform:uppercase;display:block;margin-bottom:4px;">Caixas preparadas por dia</label>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:12px;">
+          ${ORDEM_DIAS.map(d=>`<div style="text-align:center;">
+            <div style="font-size:0.68rem;color:var(--ink-soft);font-weight:700;">${DIAS_CURTO[d]}</div>
+            <input type="number" inputmode="numeric" min="0" data-role="cfg-dia" data-dow="${d}" value="${Number(c.dias[d])||''}" placeholder="0"
+              style="width:100%;border:1.5px solid var(--line);border-radius:6px;padding:6px 2px;text-align:center;font-family:var(--font-mono);">
+          </div>`).join('')}
+        </div>
+        <label style="font-size:0.72rem;font-weight:700;color:var(--ink-soft);text-transform:uppercase;display:block;margin-bottom:4px;">Adubos (receita)</label>
+        ${c.adubos.map((a,i)=>`
+          <div style="display:flex;gap:6px;margin-bottom:6px;" data-adubo="${i}">
+            <input type="text" data-role="cfg-adubo-nome" value="${escAttr(a.nome)}" placeholder="Adubo" style="flex:1;min-width:0;border:1.5px solid var(--line);border-radius:6px;padding:7px 8px;">
+            <input type="number" inputmode="decimal" data-role="cfg-adubo-kg" value="${a.kg}" placeholder="kg" style="width:72px;border:1.5px solid var(--line);border-radius:6px;padding:7px 6px;text-align:right;">
+            <button type="button" class="btn-danger-outline" data-role="cfg-adubo-rm" style="padding:4px 9px;">✕</button>
+          </div>`).join('')}
+        <button type="button" class="btn-ghost" data-role="cfg-adubo-add">+ Adubo</button>
+      </div>`;
+  });
+  html += `
+    <div class="card">
+      <div style="font-weight:800;margin-bottom:8px;">Filtros cadastrados</div>
+      ${state.ferti.filtros.map(f=>`
+        <div style="display:flex;gap:6px;margin-bottom:6px;" data-filtro="${escAttr(f.id)}">
+          <input type="text" data-role="cfg-filtro-nome" value="${escAttr(f.nome)}" style="flex:1;border:1.5px solid var(--line);border-radius:6px;padding:7px 8px;">
+          ${state.ferti.filtros.length>1?`<button type="button" class="btn-danger-outline" data-role="cfg-filtro-rm" style="padding:4px 9px;">✕</button>`:''}
+        </div>`).join('')}
+      <button type="button" class="btn-ghost" id="cfgFiltroAdd">+ Filtro</button>
+    </div>`;
+  return html;
+}
+function wireFertiCaixas(){
+  const salvar = ()=>agendarSalvarFerti();
+  document.querySelectorAll('[data-cfg]').forEach(card=>{
+    const c = fertiCaixa(card.dataset.cfg);
+    card.querySelector('[data-role="cfg-vol"]').addEventListener('input', e=>{ c.volume = Number(e.target.value)||0; salvar(); });
+    card.querySelectorAll('[data-role="cfg-dia"]').forEach(inp=>{
+      inp.addEventListener('change', e=>{
+        const n = Math.max(0, Math.round(Number(e.target.value)||0));
+        if(n) c.dias[inp.dataset.dow] = n; else delete c.dias[inp.dataset.dow];
+        salvar(); renderMantendoScroll();
+      });
+    });
+    card.querySelectorAll('[data-adubo]').forEach(row=>{
+      const a = c.adubos[Number(row.dataset.adubo)];
+      row.querySelector('[data-role="cfg-adubo-nome"]').addEventListener('input', e=>{ a.nome = e.target.value; salvar(); });
+      row.querySelector('[data-role="cfg-adubo-kg"]').addEventListener('input', e=>{ a.kg = Number(String(e.target.value).replace(',','.'))||0; salvar(); });
+      row.querySelector('[data-role="cfg-adubo-rm"]').onclick = ()=>{
+        if(!confirm(`Remover ${a.nome||'este adubo'} da caixa ${c.id}?`)) return;
+        c.adubos.splice(Number(row.dataset.adubo),1); salvar(); renderMantendoScroll();
+      };
+    });
+    card.querySelector('[data-role="cfg-adubo-add"]').onclick = ()=>{ c.adubos.push({nome:'', kg:0}); salvar(); renderMantendoScroll(); };
+  });
+  document.querySelectorAll('[data-filtro]').forEach(row=>{
+    const f = state.ferti.filtros.find(x=>x.id===row.dataset.filtro);
+    row.querySelector('[data-role="cfg-filtro-nome"]').addEventListener('input', e=>{ f.nome = e.target.value; salvar(); });
+    const rm = row.querySelector('[data-role="cfg-filtro-rm"]');
+    if(rm) rm.onclick = ()=>{
+      if(!confirm(`Remover o ${f.nome}? As verificações antigas dele continuam no histórico.`)) return;
+      state.ferti.filtros = state.ferti.filtros.filter(x=>x.id!==f.id); salvar(); render();
+    };
+  });
+  document.getElementById('cfgFiltroAdd').onclick = ()=>{
+    state.ferti.filtros.push({ id: uid(), nome: 'Filtro ' + (state.ferti.filtros.length+1) }); salvar(); render();
+  };
+}
+
+function renderMantendoScroll(){ const y = window.scrollY; render(); window.scrollTo(0, y); }
+
 /* ---------------- utils ---------------- */
 function escHTML(s){ return (s||'').replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 function escAttr(s){ return (s||'').toString().replace(/"/g,'&quot;'); }
@@ -2395,6 +3022,7 @@ function render(){
   else if(state.view==='modulo-list'){ renderModuloList(); }
   else if(state.view==='historico'){ renderHistorico(); }
   else if(state.view==='aplicacoes'){ renderAplicacoes(); }
+  else if(state.view==='ferti'){ renderFerti(); }
   else{
     const setor = getSetor(state.setorId);
     if(setor && setor.cultura==='coco') renderSetorCoco(); else renderSetor();
@@ -2422,6 +3050,7 @@ function tentarReconectar(avisar){
       aplicarConfig(cfgDoc.exists() ? cfgDoc.data() : null);
       state.configCarregadoOk = true;
       pararReconexao();
+      if(!state.fertiCarregado) await carregarFerti();
       if(!state.setores.length){
         // não tinha conseguido carregar os setores: traz agora (sem apagar nada criado no aparelho)
         try{
@@ -2469,6 +3098,7 @@ try{
   aplicarConfig(config);
   state.configCarregadoOk = !configFalhou;
   migrarSetoresPragas(state.setores);
+  await carregarFerti();
   if(configFalhou){
     showToast('Sem conexão boa agora — vou confirmar a senha de exclusão sozinho quando a internet voltar');
   } else if(doAparelho){
@@ -2481,6 +3111,7 @@ try{
   state.configCarregadoOk = false;
   showToast('Sem conexão boa agora — o app vai tentar de novo sozinho');
 }
+if(!state.ferti) aplicarFerti(null);
 render();
 if(!state.configCarregadoOk) iniciarReconexao();
 if(navigator.onLine !== false && temPendenteSheets()) agendarAutoSyncSheets();
