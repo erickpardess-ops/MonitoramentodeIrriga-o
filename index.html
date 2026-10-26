@@ -429,7 +429,7 @@ window.addEventListener('online', ()=>{
 
 
 /* ---------------- STATE ---------------- */
-const APP_VERSION = '3.15';
+const APP_VERSION = '3.16';
 const MODULOS = [
   { id:'irrigacao_cacau', titulo:'Monitoramento de Irrigação', sub:'Cacau', emoji:'💧', canto:'🍫', cor:'#2F4A2C', cultura:'cacau', tipo:'irrigacao' },
   { id:'irrigacao_coco', titulo:'Monitoramento de Irrigação', sub:'Coco', emoji:'💧', canto:'🥥', cor:'#1F5A78', cultura:'coco', tipo:'irrigacao' },
@@ -442,7 +442,7 @@ let state = {
   webAppUrl:'https://script.google.com/macros/s/AKfycby2fY9XUmx0jv0MLQwJoFuefXs2UfjO7zYonZKmdPUhAuqHemnlSGTB9jOAtbjVFJI/exec',
   senhaExclusao:'', configCarregadoOk:false,
   aplicacoesCacau:[], produtosAplicacao:[], buscaSetorLista:'', buscaAplicacao:'',
-  ferti:null, fertiCarregado:false, fertiAlteradoLocal:false, fertiAba:'semana', fertiSemana:null, fertiEditVer:null, fertiFiltroVer:'todos', fertiFiltroDia:null,
+  ferti:null, fertiCarregado:false, fertiAlteradoLocal:false, fertiAba:'semana', fertiSemana:null, fertiEditVer:null, fertiFiltroVer:'todos', fertiFiltroDia:null, fertiAdminOk:false,
   showPragasManager:false, historicoSetorId:null, historicoTipo:null,
   pragasTipos: [
     {id:'p01', nome:'Lagarta (Lepidópteros Spp.)', tipo:'lagarta'},
@@ -1133,15 +1133,15 @@ function configurarSenhaExclusao(){
     if(atual===null) return;
     if(atual !== state.senhaExclusao){ showToast('Senha incorreta'); return; }
   }
-  const nova = prompt('Crie a nova senha para excluir setores (deixe em branco para remover a proteção):', '');
+  const nova = prompt('Crie a nova senha do administrador (exclui setores e altera as caixas da fertirrigação). Deixe em branco para remover a proteção:', '');
   if(nova===null) return;
   state.senhaExclusao = nova.trim();
   agendarSalvarConfig();
-  showToast(state.senhaExclusao ? 'Senha de exclusão definida' : 'Proteção por senha removida');
+  showToast(state.senhaExclusao ? 'Senha do administrador definida' : 'Proteção por senha removida');
 }
 function confirmarSenhaExclusao(){
   if(!state.configCarregadoOk){
-    alert('Sem internet agora, não deu para confirmar a senha de exclusão.\n\nTente excluir de novo quando a internet voltar — o app confere a senha sozinho.');
+    alert('Sem internet agora, não deu para confirmar a senha do administrador.\n\nTente excluir de novo quando a internet voltar — o app confere a senha sozinho.');
     return false;
   }
   if(!state.senhaExclusao) return true;
@@ -1229,11 +1229,11 @@ function fertiTileHTML(){
         ${alertas?`<span style="position:absolute;top:8px;right:8px;background:#fff;color:var(--danger);border-radius:12px;padding:2px 7px;font-size:0.7rem;font-weight:800;">⚠️ ${alertas}</span>`:''}
         <div class="modulo-emoji">🪣<span class="modulo-canto">💧</span></div>
         <div class="modulo-titulo">Fertirrigação</div>
-        <div class="modulo-sub">${r.feitas}/${r.previstas} caixas na semana</div>
+        <div class="modulo-sub">Previsto ${r.previstas} · Realizado ${r.feitas}</div>
       </div>`;
 }
 function abrirFerti(){
-  state.view='ferti'; state.fertiSemana = segundaDaSemana(hojeISO()); state.fertiFiltroDia = hojeISO(); state.fertiEditVer = null; render();
+  state.view='ferti'; state.fertiSemana = segundaDaSemana(hojeISO()); state.fertiFiltroDia = hojeISO(); state.fertiEditVer = null; state.fertiAdminOk = false; render();
   // traz o que outro aparelho registrou (sem atrapalhar o que está sendo digitado)
   carregarFerti().then(ok=>{ if(ok && state.view==='ferti' && !state.fertiEditVer) renderMantendoScroll(); });
 }
@@ -1252,12 +1252,12 @@ function renderHome(){
     </div>
     <div style="font-size:0.72rem;color:var(--ink-soft);text-align:center;margin:-6px 0 4px;">☁️ Salvo automaticamente — sincroniza sozinho com o Google Sheets</div>
     <div style="font-size:0.72rem;text-align:center;margin:0 0 14px;color:${!state.configCarregadoOk?'var(--danger)':(state.senhaExclusao?'var(--ok)':'var(--ink-soft)')};">
-      ${!state.configCarregadoOk ? '⚠️ Sem conexão — tentando de novo sozinho… (só a exclusão de setores fica travada até lá)' : (state.senhaExclusao ? '🔒 Exclusão protegida por senha' : '🔓 Exclusão sem senha configurada')}
+      ${!state.configCarregadoOk ? '⚠️ Sem conexão — tentando de novo sozinho… (só a exclusão de setores fica travada até lá)' : (state.senhaExclusao ? '🔒 Senha do administrador ativa (excluir setores e alterar caixas)' : '🔓 Sem senha do administrador')}
     </div>
     <div class="toolbar" style="margin-top:6px;">
       <button class="btn-ghost" id="btnAplicacoes" style="border-color:#00B050;color:#00B050;">🧪 Aplicações (produtos)</button>
       <button class="btn-ghost" id="btnExpCSV">📊 Exportar planilha (.csv)</button>
-      <button class="btn-ghost" id="btnSenhaExclusao">🔒 Senha de exclusão</button>
+      <button class="btn-ghost" id="btnSenhaExclusao">🔒 Senha do administrador</button>
       <button class="btn-ghost" id="btnConfigSheets">🔗 Configurar Google Sheets</button>
       <button class="btn-ghost" id="btnTestarSheets">🧪 Testar link do Sheets</button>
       <button class="btn-ghost" id="btnEnviarSheets" style="border-color:var(--forest);color:var(--forest);">☁️ Sincronizar agora</button>
@@ -2470,9 +2470,18 @@ function completarPlano(plano){
   });
   return plano;
 }
+/* Limpeza dos filtros: para cada dia de ferti (0=domingo … 6=sábado), o dia da semana em que o filtro é limpo
+   (no fim da tarde, no dia mais próximo antes da ferti). */
+const LIMPEZA_VESPERA = {0:6, 1:0, 2:1, 3:2, 4:3, 5:4, 6:5};
+const LIMPEZA_FILTRO_26_10_2026 = {0:5, 1:0, 2:1, 3:2, 4:3, 5:4, 6:5};   // ferti de sábado e de domingo: limpeza na sexta
+function completarEscala(e){
+  e.plano = completarPlano(e.plano || {});
+  if(!e.limpezaFiltro) e.limpezaFiltro = copiaJSON(e.desde >= ESCALA_NOVA_DESDE ? LIMPEZA_FILTRO_26_10_2026 : LIMPEZA_VESPERA);
+  return e;
+}
 function escalasPadrao(){
-  return [{ desde: ESCALA_INICIO, plano: completarPlano(copiaJSON(ESCALA_ORIGINAL)) },
-          { desde: ESCALA_NOVA_DESDE, plano: completarPlano(copiaJSON(ESCALA_26_10_2026)) }];
+  return [completarEscala({ desde: ESCALA_INICIO, plano: copiaJSON(ESCALA_ORIGINAL) }),
+          completarEscala({ desde: ESCALA_NOVA_DESDE, plano: copiaJSON(ESCALA_26_10_2026) })];
 }
 
 function fertiPadrao(){
@@ -2536,7 +2545,7 @@ function escalaEditavel(){
   const seg = segundaDaSemana(hojeISO());
   const atual = escalaDaSemana(seg);
   if(atual.desde === seg) return atual;
-  const nova = { desde: seg, plano: copiaJSON(atual.plano) };
+  const nova = { desde: seg, plano: copiaJSON(atual.plano), limpezaFiltro: copiaJSON(atual.limpezaFiltro || LIMPEZA_VESPERA) };
   state.ferti.escalas.push(nova);
   state.ferti.escalas.sort((a,b)=> a.desde < b.desde ? -1 : (a.desde > b.desde ? 1 : 0));
   return nova;
@@ -2629,7 +2638,7 @@ function aplicarFerti(dados){
     migrou = true;
   }
   escalas.sort((a,b)=> a.desde < b.desde ? -1 : (a.desde > b.desde ? 1 : 0));
-  escalas.forEach(e=>{ e.plano = completarPlano(e.plano || {}); });
+  escalas.forEach(e=>completarEscala(e));
   state.ferti = {
     caixas,
     escalas,
@@ -2703,7 +2712,7 @@ function buildFertiLimpezas(){
 }
 function buildFertiFiltros(){
   return state.ferti.verificacoes.map(v=>({
-    Id: v.id, DataLimpeza: v.data, FertiDe: somaDias(v.data, 1), Filtro: nomeFiltro(v.filtroId),
+    Id: v.id, DataLimpeza: v.data, FertiDe: fertiDoRegistro(v).join(', '), Filtro: nomeFiltro(v.filtroId),
     Nivel: (NIVEL_FILTRO[v.nivel]||{}).rotulo || '', Comentario: v.comentario||'',
     FotosAntes: v.qtdAntes||0, FotosDepois: v.qtdDepois||0
   }));
@@ -2750,20 +2759,21 @@ function fertiSemanaHTML(){
       </div>
       <button type="button" class="btn-ghost" id="fsProx">▶</button>
     </div>
-    <div class="stat-row">
-      <div class="stat"><div class="num">${r.feitas}/${r.previstas}</div><div class="lbl">Preparadas</div></div>
-      <div class="stat"><div class="num" style="color:var(--pending);">${r.pendentes}</div><div class="lbl">Pendentes</div></div>
-      <div class="stat"><div class="num" style="color:${r.atrasadas?'var(--danger)':'var(--ok)'};">${r.atrasadas}</div><div class="lbl">Atrasadas</div></div>
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:14px;">
+      <div class="stat" style="padding:10px 4px;"><div class="num" style="color:var(--ink);">${r.previstas}</div><div class="lbl">Previsto</div></div>
+      <div class="stat" style="padding:10px 4px;"><div class="num" style="color:var(--ok);">${r.feitas}</div><div class="lbl">Realizado</div></div>
+      <div class="stat" style="padding:10px 4px;"><div class="num" style="color:var(--pending);">${r.pendentes}</div><div class="lbl">Pendente</div></div>
+      <div class="stat" style="padding:10px 4px;"><div class="num" style="color:${r.atrasadas?'var(--danger)':'var(--ok)'};">${r.atrasadas}</div><div class="lbl">Atrasado</div></div>
     </div>
     <div class="card" style="padding:10px 12px;">
-      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;text-align:center;">
-        ${state.ferti.caixas.map(c=>{
-          const pc = r.porCaixa[c.id]; const ok = pc.previstas && pc.feitas>=pc.previstas;
-          return `<div style="border-radius:8px;padding:6px 2px;background:${ok?'var(--ok-bg)':'var(--surface-2)'};">
-            <div style="font-weight:800;">${escHTML(c.id)}</div>
-            <div style="font-family:var(--font-mono);font-size:0.75rem;color:${ok?'var(--ok)':'var(--ink-soft)'};">${pc.feitas}/${pc.previstas}</div>
-          </div>`;
-        }).join('')}
+      <div style="display:grid;grid-template-columns:62px repeat(${state.ferti.caixas.length},minmax(0,1fr));gap:4px;text-align:center;align-items:center;">
+        <div></div>
+        ${state.ferti.caixas.map(c=>`<div style="font-weight:800;">${escHTML(c.id)}</div>`).join('')}
+        <div style="text-align:left;font-size:0.64rem;font-weight:800;color:var(--ink-soft);text-transform:uppercase;">Previsto</div>
+        ${state.ferti.caixas.map(c=>`<div style="font-family:var(--font-mono);font-size:0.8rem;color:var(--ink-soft);background:var(--surface-2);border-radius:6px;padding:3px 0;">${r.porCaixa[c.id].previstas}</div>`).join('')}
+        <div style="text-align:left;font-size:0.64rem;font-weight:800;color:var(--ok);text-transform:uppercase;">Realizado</div>
+        ${state.ferti.caixas.map(c=>{ const pc = r.porCaixa[c.id]; const ok = pc.previstas && pc.feitas >= pc.previstas;
+          return `<div style="font-family:var(--font-mono);font-size:0.8rem;font-weight:800;color:${ok?'var(--ok)':'var(--ink)'};background:${ok?'var(--ok-bg)':'var(--surface)'};border:1px solid ${ok?'var(--ok)':'var(--line)'};border-radius:6px;padding:2px 0;">${pc.feitas}</div>`; }).join('')}
       </div>
     </div>`;
   ORDEM_DIAS.forEach(dow=>{
@@ -2772,7 +2782,10 @@ function fertiSemanaHTML(){
     if(!itens.length) return;
     const temNoite = itens.some(i=>i.per==='noturno');
     html += `<div class="section-title">${DIAS_SEMANA[dow]} · ${fmtCurto(data)}${data===hoje?' · HOJE':''}<span class="rule"></span></div>
-      <div class="card" style="padding:4px 14px;">`;
+      <div class="card" style="padding:4px 14px;">
+        <p style="margin:0;padding:8px 0 4px;display:flex;justify-content:flex-end;gap:10px;font-size:0.64rem;font-weight:800;letter-spacing:0.3px;text-transform:uppercase;">
+          <span style="width:56px;text-align:center;color:var(--ink-soft);">Previsto</span><span style="width:100px;text-align:center;color:var(--ok);">Realizado</span>
+        </p>`;
     let perAtual = null;
     itens.forEach(({c, per, prev, fe})=>{
       if(temNoite && per !== perAtual){   // só separa diurno/noturno nos dias que têm preparo à noite
@@ -2786,11 +2799,12 @@ function fertiSemanaHTML(){
         : `<span class="badge pending">prevista</span>`;
       html += `
         <div class="row-item" data-cx="${escAttr(c.id)}" data-dow="${dow}" data-per="${per}"${per==='noturno'?' style="border-left:3px solid #34406B;padding-left:9px;"':''}>
-          <div class="lbl">Caixa ${escHTML(c.id)}${per==='noturno'?' 🌙':''} <span style="font-weight:400;color:var(--ink-soft);">· ${c.volume} L · previstas ${prev}</span>
+          <div class="lbl" style="flex:1;min-width:0;">Caixa ${escHTML(c.id)}${per==='noturno'?' 🌙':''} <span style="font-weight:400;color:var(--ink-soft);">· ${c.volume} L</span>
             <span class="sub">${c.adubos.map(a=>`${escHTML(a.nome)} ${fmtKg(a.kg)} kg`).join(' + ')}</span>
             <div style="margin-top:4px;">${badge}</div>
           </div>
-          <div class="stepper">
+          <div style="width:56px;flex-shrink:0;text-align:center;font-family:var(--font-mono);font-weight:800;font-size:1rem;color:var(--ink-soft);background:var(--surface-2);border-radius:6px;padding:5px 0;">${prev}</div>
+          <div class="stepper" style="width:100px;flex-shrink:0;justify-content:center;">
             <button type="button" data-role="fs-menos">−</button>
             <div class="val">${fe}</div>
             <button type="button" data-role="fs-mais">+</button>
@@ -2799,7 +2813,7 @@ function fertiSemanaHTML(){
     });
     html += `</div>`;
   });
-  html += `<div style="font-size:0.72rem;color:var(--ink-soft);text-align:center;margin-top:6px;">Use o + a cada caixa preparada. A escala (dias, quantidades e período) é ajustada na aba ⚙️ Caixas.</div>`;
+  html += `<div style="font-size:0.72rem;color:var(--ink-soft);text-align:center;margin-top:6px;">Toque no + da coluna Realizado a cada caixa preparada. O previsto vem da escala da aba ⚙️ Caixas.</div>`;
   return html;
 }
 function wireFertiSemana(){
@@ -2884,13 +2898,35 @@ function wireFertiLimpeza(){
   });
 }
 
-/* ----- Filtros: limpeza no fim da tarde, véspera da ferti (que começa de madrugada) ----- */
-/** Filtros a limpar num dia: os das caixas que fazem a ferti do dia seguinte. */
-function filtrosParaLimpar(dataISO){
-  const amanha = somaDias(dataISO, 1);
-  const seg = segundaDaSemana(amanha), dow = dataDeISO(amanha).getDay();
-  return state.ferti.caixas.filter(c=> Number(planoCaixa(seg, c.id).ferti[dow]) > 0).map(c=>c.id);
+/* ----- Filtros: limpeza no fim da tarde, antes da ferti (que começa de madrugada) ----- */
+/** Dia da semana em que é feita a limpeza do filtro para a ferti dessa data. */
+function diaLimpezaDaFerti(fertiISO){
+  const dow = dataDeISO(fertiISO).getDay();
+  const m = escalaDaSemana(segundaDaSemana(fertiISO)).limpezaFiltro || LIMPEZA_VESPERA;
+  const v = m[dow];
+  return (v === undefined || v === null || v === '') ? (dow + 6) % 7 : Number(v);
 }
+/** Datas de ferti (nos 7 dias seguintes) cujos filtros são limpos neste dia. */
+function fertisAtendidas(dataISO){
+  const w = dataDeISO(dataISO).getDay(), datas = [];
+  for(let k=1; k<=7; k++){ const f = somaDias(dataISO, k); if(diaLimpezaDaFerti(f) === w) datas.push(f); }
+  return datas;
+}
+/** Filtros a limpar num dia: [{ id (= caixa), fertis: [datas de ferti atendidas] }]. */
+function filtrosParaLimpar(dataISO){
+  const mapa = {};
+  fertisAtendidas(dataISO).forEach(f=>{
+    const seg = segundaDaSemana(f), dow = dataDeISO(f).getDay();
+    state.ferti.caixas.forEach(c=>{ if(Number(planoCaixa(seg, c.id).ferti[dow]) > 0) (mapa[c.id] = mapa[c.id] || []).push(f); });
+  });
+  return state.ferti.caixas.filter(c=>mapa[c.id]).map(c=>({ id: c.id, fertis: mapa[c.id] }));
+}
+function listaDatas(datas){
+  const n = datas.map(nomeDiaCurto);
+  return n.length <= 1 ? (n[0] || '') : n.slice(0, -1).join(', ') + ' e ' + n[n.length - 1];
+}
+/** Para quais fertis vale uma limpeza registrada (vazio = fora da escala). */
+function fertiDoRegistro(v){ const e = filtrosParaLimpar(v.data).find(p=>p.id===v.filtroId); return e ? e.fertis : []; }
 function nomeFiltro(id){
   if(fertiCaixa(id)) return 'Filtro ' + id;
   const f = (state.ferti.filtros||[]).find(x=>x.id===id);
@@ -2906,7 +2942,7 @@ function qtdFotosTexto(v){
   return p.join(' · ');
 }
 function resumoFiltrosDia(dataISO){
-  const previstos = filtrosParaLimpar(dataISO);
+  const previstos = filtrosParaLimpar(dataISO).map(p=>p.id);
   return { previstos, feitos: previstos.filter(id=>limpezaDoFiltro(dataISO, id)).length };
 }
 function fertiFiltrosHTML(){
@@ -2914,7 +2950,9 @@ function fertiFiltrosHTML(){
   const dia = state.fertiFiltroDia || hoje;
   state.fertiFiltroDia = dia;
   const amanha = somaDias(dia, 1);
-  const previstos = filtrosParaLimpar(dia);
+  const infoPrevistos = filtrosParaLimpar(dia);
+  const previstos = infoPrevistos.map(p=>p.id);
+  const fertisDia = fertisAtendidas(dia);
   const ids = previstos.slice();
   state.ferti.verificacoes.forEach(v=>{ if(v.data===dia && !ids.includes(v.filtroId)) ids.push(v.filtroId); });
   const seg = segundaDaSemana(dia);
@@ -2924,7 +2962,7 @@ function fertiFiltrosHTML(){
         <button type="button" class="btn-ghost" id="flAnt">◀</button>
         <div style="text-align:center;">
           <div style="font-weight:800;">${DIAS_SEMANA[dataDeISO(dia).getDay()]}, ${fmtCurto(dia)}${dia===hoje?' · hoje':''}</div>
-          <div style="font-size:0.74rem;color:var(--ink-soft);margin-top:2px;">Limpeza no fim da tarde → ferti de ${nomeDiaCurto(amanha)} (madrugada)</div>
+          <div style="font-size:0.74rem;color:var(--ink-soft);margin-top:2px;">${fertisDia.length ? `Limpeza no fim da tarde → ferti de ${listaDatas(fertisDia)} (madrugada)` : 'Sem limpeza de filtro neste dia'}</div>
         </div>
         <button type="button" class="btn-ghost" id="flProx">▶</button>
       </div>
@@ -2937,13 +2975,19 @@ function fertiFiltrosHTML(){
           const fundo = sel ? 'var(--forest)' : (completo ? 'var(--ok-bg)' : (atrasado ? 'var(--danger-bg)' : 'var(--surface-2)'));
           const cor = sel ? '#fff' : (completo ? 'var(--ok)' : (atrasado ? 'var(--danger)' : 'var(--ink-soft)'));
           return `<button type="button" data-fdia="${d}" style="border:none;border-radius:8px;padding:5px 0;background:${fundo};color:${cor};font-size:0.68rem;font-weight:700;line-height:1.35;">
-            ${DIAS_CURTO[dataDeISO(d).getDay()]}<br><span style="font-family:var(--font-mono);">${r.previstos.length ? `${r.feitos}/${r.previstos.length}` : '—'}</span></button>`;
+            ${DIAS_CURTO[dataDeISO(d).getDay()]}<br><span style="font-family:var(--font-mono);">${r.previstos.length ? `${r.previstos.length} · ✓${r.feitos}` : '—'}</span></button>`;
         }).join('')}
       </div>
+      <div style="font-size:0.66rem;color:var(--ink-soft);text-align:center;margin-top:4px;">nº = filtros previstos · ✓ = limpezas realizadas</div>
       ${dia!==hoje ? `<div style="text-align:center;margin-top:8px;"><button type="button" class="btn-ghost" id="flHoje" style="padding:3px 8px;font-size:0.7rem;">ir para hoje</button></div>` : ''}
     </div>
     <div class="card" style="padding:4px 14px;">`;
-  if(!ids.length) html += `<div style="padding:12px 0;font-size:0.85rem;color:var(--ink-soft);">Nenhum filtro para limpar — não há ferti em ${nomeDiaCurto(amanha)}.</div>`;
+  if(previstos.length) html += `<p style="margin:0;padding:8px 0 4px;font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.3px;">
+      <span style="color:var(--ink-soft);">Previsto: ${previstos.length}</span> · <span style="color:var(--ok);">Realizado: ${previstos.filter(id=>limpezaDoFiltro(dia, id)).length}</span></p>`;
+  if(!ids.length){
+    const outroDia = (()=>{ const w = diaLimpezaDaFerti(amanha), dowA = dataDeISO(amanha).getDay(); const gap = ((dowA - w + 7) % 7) || 7; return somaDias(amanha, -gap); })();
+    html += `<div style="padding:12px 0;font-size:0.85rem;color:var(--ink-soft);">Nenhum filtro para limpar neste dia.${outroDia!==dia && state.ferti.caixas.some(c=>Number(planoCaixa(segundaDaSemana(amanha), c.id).ferti[dataDeISO(amanha).getDay()]) > 0) ? ` Os filtros da ferti de ${nomeDiaCurto(amanha)} são limpos em ${nomeDiaCurto(outroDia)}.` : ''}</div>`;
+  }
   ids.forEach(id=>{
     const v = limpezaDoFiltro(dia, id);
     const n = v && NIVEL_FILTRO[v.nivel];
@@ -2954,7 +2998,7 @@ function fertiFiltrosHTML(){
       : `<span class="badge pending">prevista</span>`;
     html += `
       <div class="row-item" data-flt="${escAttr(id)}">
-        <div class="lbl">${escHTML(nomeFiltro(id))}<span class="sub">${fora ? 'fora da escala' : `caixa ${escHTML(id)} · ferti de ${nomeDiaCurto(amanha)}`}${v && qtdFotosTexto(v) ? ` · 📷 ${qtdFotosTexto(v)}` : ''}</span>
+        <div class="lbl">${escHTML(nomeFiltro(id))}<span class="sub">${fora ? 'fora da escala' : `caixa ${escHTML(id)} · ferti de ${listaDatas((infoPrevistos.find(p=>p.id===id)||{fertis:[]}).fertis)}`}${v && qtdFotosTexto(v) ? ` · 📷 ${qtdFotosTexto(v)}` : ''}</span>
           <div style="margin-top:4px;">${badge}</div>
         </div>
         <button type="button" class="${v?'btn-ghost':'btn-secondary'}" data-role="fl-abrir" style="flex-shrink:0;">${v?'✎ Editar':'🧽 Registrar'}</button>
@@ -2989,7 +3033,7 @@ function fertiFiltrosHTML(){
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
           <div>
             <div style="font-weight:800;">${escHTML(nomeFiltro(v.filtroId))} · ${fmtBR(v.data)}</div>
-            <div style="font-size:0.74rem;color:var(--ink-soft);">limpo no fim da tarde → ferti de ${nomeDiaCurto(somaDias(v.data,1))}</div>
+            <div style="font-size:0.74rem;color:var(--ink-soft);">${(()=>{ const f = fertiDoRegistro(v); return f.length ? 'limpo no fim da tarde → ferti de ' + listaDatas(f) : 'limpeza fora da escala'; })()}</div>
             ${n?`<span class="badge" style="background:${n.fundo};color:${n.cor};margin-top:4px;">${n.rotulo}</span>`:''}
             ${v.comentario?`<div style="font-size:0.82rem;margin-top:6px;white-space:pre-wrap;">${escHTML(v.comentario)}</div>`:''}
           </div>
@@ -3018,7 +3062,7 @@ function fertiLimpezaFiltroFormHTML(ed){
   return `
   <div class="card" id="formVerif" style="border-color:var(--forest);">
     <div style="font-weight:800;">🧽 Limpeza do ${escHTML(nomeFiltro(ed.filtroId))}</div>
-    <div style="font-size:0.75rem;color:var(--ink-soft);margin-bottom:12px;">fim da tarde de ${nomeDiaCurto(ed.data)} → ferti de ${nomeDiaCurto(somaDias(ed.data,1))} (madrugada)</div>
+    <div style="font-size:0.75rem;color:var(--ink-soft);margin-bottom:12px;">${(()=>{ const f = (filtrosParaLimpar(ed.data).find(p=>p.id===ed.filtroId)||{fertis:[]}).fertis; return `fim da tarde de ${nomeDiaCurto(ed.data)}` + (f.length ? ` → ferti de ${listaDatas(f)} (madrugada)` : ' (fora da escala)'); })()}</div>
     <div class="field-row"><label>Data da limpeza</label><input type="date" id="fvData" value="${escAttr(ed.data)}"></div>
     <div class="field-row"><label>Nível de sujidade (antes de limpar)</label>
       <div class="chip-row" style="margin:0;">
@@ -3154,14 +3198,39 @@ function wireFertiFiltros(){
 }
 
 /* ----- Caixas: receita, volume, escala de preparo e dias de ferti ----- */
+/** Libera a aba Caixas com a senha do administrador (a mesma que protege a exclusão de setores). */
+async function desbloquearCaixas(){
+  await garantirConfigAgora();
+  if(!state.configCarregadoOk){ alert('Sem internet agora — não deu para conferir a senha do administrador.\n\nTente de novo quando a internet voltar.'); return; }
+  if(!state.senhaExclusao){
+    if(!confirm('Ainda não existe senha do administrador.\n\nCriar uma agora? Ela também passa a proteger a exclusão de setores.')) return;
+    const nova = prompt('Crie a senha do administrador:', '');
+    if(nova===null || !nova.trim()){ showToast('Senha não criada'); return; }
+    state.senhaExclusao = nova.trim();
+    agendarSalvarConfig();
+    state.fertiAdminOk = true;
+    showToast('Senha criada — edição liberada');
+    renderMantendoScroll();
+    return;
+  }
+  const digitada = prompt('Senha do administrador:');
+  if(digitada===null) return;
+  if(digitada === state.senhaExclusao){ state.fertiAdminOk = true; showToast('Edição liberada'); renderMantendoScroll(); }
+  else alert('Senha incorreta.');
+}
 function fertiCaixasHTML(){
   const segAtual = segundaDaSemana(hojeISO());
   const esc = escalaDaSemana(segAtual);
+  const livre = !!state.fertiAdminOk, dis = livre ? '' : 'disabled';
   let html = `
+    <div class="card" style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;${livre?'border-color:var(--ok);background:var(--ok-bg);':''}">
+      <div style="font-size:0.82rem;">${livre ? '🔓 <strong>Edição liberada</strong> (administrador)' : '🔒 Só o administrador altera as caixas'}</div>
+      <button type="button" class="${livre?'btn-ghost':'btn-secondary'}" id="cfgCadeado" style="flex-shrink:0;">${livre?'Bloquear':'🔑 Desbloquear'}</button>
+    </div>
     <div class="card" style="padding:10px 14px;font-size:0.8rem;color:var(--ink-soft);">
       📋 ${esc.desde===ESCALA_INICIO ? 'Escala de preparo original' : `Escala de preparo em vigor desde <strong style="color:var(--ink);">${fmtBR(esc.desde)}</strong>`}.
       Mudanças aqui valem a partir desta semana — as semanas anteriores continuam com a escala que estava valendo.
-      <div style="margin-top:6px;">💧 = dia em que a caixa faz a ferti (de madrugada). O filtro dela entra na lista de limpeza da véspera, no fim da tarde.</div>
+      <div style="margin-top:6px;">💧 = dia em que a caixa faz a ferti (de madrugada). O dia da limpeza do filtro de cada ferti fica no fim desta página.</div>
     </div>`;
   state.ferti.caixas.forEach(c=>{
     const plano = planoCaixa(segAtual, c.id);
@@ -3172,33 +3241,61 @@ function fertiCaixasHTML(){
           <div style="font-weight:800;font-size:1.05rem;">Caixa ${escHTML(c.id)}</div>
           <span class="badge pending">${total} preparo(s)/semana</span>
         </div>
-        <div class="field-row"><label>Volume (L)</label><input type="number" inputmode="decimal" data-role="cfg-vol" value="${c.volume}"></div>
+        <div class="field-row"><label>Volume (L)</label><input type="number" inputmode="decimal" data-role="cfg-vol" value="${c.volume}" ${dis}></div>
         <label style="font-size:0.72rem;font-weight:700;color:var(--ink-soft);text-transform:uppercase;display:block;margin-bottom:4px;">Preparo (caixas por dia) e dias de ferti</label>
         <div style="display:grid;grid-template-columns:52px repeat(7,minmax(0,1fr));gap:4px;align-items:center;margin-bottom:12px;">
           <div></div>
           ${ORDEM_DIAS.map(d=>`<div style="text-align:center;font-size:0.68rem;color:var(--ink-soft);font-weight:700;">${DIAS_CURTO[d]}</div>`).join('')}
           ${PERIODOS.map(per=>`
             <div style="font-size:0.68rem;font-weight:700;color:${per==='noturno'?'#34406B':'var(--ink-soft)'};">${per==='noturno'?'🌙 Noite':'☀️ Dia'}</div>
-            ${ORDEM_DIAS.map(d=>`<input type="number" inputmode="numeric" min="0" data-role="cfg-dia" data-dow="${d}" data-per="${per}" value="${Number(plano[per][d])||''}" placeholder="0"
+            ${ORDEM_DIAS.map(d=>`<input type="number" inputmode="numeric" min="0" data-role="cfg-dia" data-dow="${d}" data-per="${per}" value="${Number(plano[per][d])||''}" placeholder="0" ${dis}
               style="width:100%;min-width:0;border:1.5px solid var(--line);border-radius:6px;padding:6px 2px;text-align:center;font-family:var(--font-mono);${per==='noturno'?'background:#EEF0F7;':''}">`).join('')}`).join('')}
           <div style="font-size:0.68rem;font-weight:700;color:#1F5A78;">💧 Ferti</div>
           ${ORDEM_DIAS.map(d=>{ const on = Number(plano.ferti[d]) > 0;
-            return `<button type="button" data-role="cfg-ferti" data-dow="${d}" aria-pressed="${on}" style="height:30px;min-width:0;padding:0;border-radius:6px;border:1.5px solid ${on?'#1F5A78':'var(--line)'};background:${on?'#DCEBF3':'var(--surface)'};font-size:0.8rem;">${on?'💧':''}</button>`; }).join('')}
+            return `<button type="button" data-role="cfg-ferti" data-dow="${d}" aria-pressed="${on}" ${dis} style="height:30px;min-width:0;padding:0;border-radius:6px;border:1.5px solid ${on?'#1F5A78':'var(--line)'};background:${on?'#DCEBF3':'var(--surface)'};font-size:0.8rem;">${on?'💧':''}</button>`; }).join('')}
         </div>
         <label style="font-size:0.72rem;font-weight:700;color:var(--ink-soft);text-transform:uppercase;display:block;margin-bottom:4px;">Adubos (receita)</label>
         ${c.adubos.map((a,i)=>`
           <div style="display:flex;gap:6px;margin-bottom:6px;" data-adubo="${i}">
-            <input type="text" data-role="cfg-adubo-nome" value="${escAttr(a.nome)}" placeholder="Adubo" style="flex:1;min-width:0;border:1.5px solid var(--line);border-radius:6px;padding:7px 8px;">
-            <input type="number" inputmode="decimal" data-role="cfg-adubo-kg" value="${a.kg}" placeholder="kg" style="width:72px;border:1.5px solid var(--line);border-radius:6px;padding:7px 6px;text-align:right;">
-            <button type="button" class="btn-danger-outline" data-role="cfg-adubo-rm" style="padding:4px 9px;">✕</button>
+            <input type="text" data-role="cfg-adubo-nome" value="${escAttr(a.nome)}" placeholder="Adubo" ${dis} style="flex:1;min-width:0;border:1.5px solid var(--line);border-radius:6px;padding:7px 8px;">
+            <input type="number" inputmode="decimal" data-role="cfg-adubo-kg" value="${a.kg}" placeholder="kg" ${dis} style="width:72px;border:1.5px solid var(--line);border-radius:6px;padding:7px 6px;text-align:right;">
+            ${livre ? `<button type="button" class="btn-danger-outline" data-role="cfg-adubo-rm" style="padding:4px 9px;">✕</button>` : ''}
           </div>`).join('')}
-        <button type="button" class="btn-ghost" data-role="cfg-adubo-add">+ Adubo</button>
+        ${livre ? `<button type="button" class="btn-ghost" data-role="cfg-adubo-add">+ Adubo</button>` : ''}
       </div>`;
   });
+  const mapa = esc.limpezaFiltro || LIMPEZA_VESPERA;
+  html += `
+    <div class="card">
+      <div style="font-weight:800;margin-bottom:4px;">🔍 Limpeza dos filtros</div>
+      <div style="font-size:0.75rem;color:var(--ink-soft);margin-bottom:6px;">Dia em que o filtro é limpo (fim da tarde) para cada dia de ferti.</div>
+      ${ORDEM_DIAS.map(f=>{
+        const atual = mapa[f] !== undefined ? Number(mapa[f]) : (f + 6) % 7;
+        return `<div class="row-item">
+          <div class="lbl">Ferti de ${DIAS_SEMANA[f].toLowerCase()}</div>
+          <select data-role="cfg-limpeza" data-ferti="${f}" ${dis} style="border:1.5px solid var(--line);border-radius:8px;padding:6px 8px;font-size:0.82rem;background:var(--surface);color:var(--ink);">
+            ${[1,2,3,4,5,6].map(k=>{ const w = (f - k + 7) % 7; return `<option value="${w}" ${w===atual?'selected':''}>${DIAS_SEMANA[w].toLowerCase()} (${k===1 ? 'véspera' : k + ' dias antes'})</option>`; }).join('')}
+          </select>
+        </div>`;
+      }).join('')}
+    </div>`;
   return html;
 }
 function wireFertiCaixas(){
+  document.getElementById('cfgCadeado').onclick = ()=>{
+    if(state.fertiAdminOk){ state.fertiAdminOk = false; showToast('Caixas bloqueadas'); renderMantendoScroll(); }
+    else desbloquearCaixas();
+  };
+  if(!state.fertiAdminOk) return;   // sem a senha, a aba fica só para consulta
   const salvar = ()=>agendarSalvarFerti();
+  document.querySelectorAll('[data-role="cfg-limpeza"]').forEach(sel=>{
+    sel.onchange = ()=>{
+      const esc = escalaEditavel();
+      esc.limpezaFiltro = esc.limpezaFiltro || copiaJSON(LIMPEZA_VESPERA);
+      esc.limpezaFiltro[sel.dataset.ferti] = Number(sel.value);
+      salvar(); renderMantendoScroll();
+    };
+  });
   document.querySelectorAll('[data-cfg]').forEach(card=>{
     const c = fertiCaixa(card.dataset.cfg);
     card.querySelector('[data-role="cfg-vol"]').addEventListener('input', e=>{ c.volume = Number(e.target.value)||0; salvar(); });
@@ -3288,7 +3385,7 @@ function tentarReconectar(avisar){
         }catch(e){}
       }
       if(state.view==='home' || state.view==='modulo-list') render();
-      if(avisar) showToast('✓ Conexão de volta — senha de exclusão confirmada');
+      if(avisar) showToast('✓ Conexão de volta — senha do administrador confirmada');
       return true;
     }catch(e){
       return false;
@@ -3308,7 +3405,7 @@ function pararReconexao(){
 /** Antes de excluir ou mexer na senha: se ainda não confirmou, tenta na hora. */
 async function garantirConfigAgora(){
   if(state.configCarregadoOk) return true;
-  showToast('Conferindo a senha de exclusão…');
+  showToast('Conferindo a senha do administrador…');
   return await tentarReconectar(false);
 }
 window.addEventListener('online', ()=>{ if(!state.configCarregadoOk) tentarReconectar(true); });
@@ -3327,7 +3424,7 @@ try{
   migrarSetoresPragas(state.setores);
   await carregarFerti();
   if(configFalhou){
-    showToast('Sem conexão boa agora — vou confirmar a senha de exclusão sozinho quando a internet voltar');
+    showToast('Sem conexão boa agora — vou confirmar a senha do administrador sozinho quando a internet voltar');
   } else if(doAparelho){
     showToast(`Sem internet — ${setores.length} setor(es) do aparelho. Tudo fica salvo e vai para a planilha quando a internet voltar.`);
   } else {
