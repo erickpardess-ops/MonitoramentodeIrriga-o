@@ -429,7 +429,7 @@ window.addEventListener('online', ()=>{
 
 
 /* ---------------- STATE ---------------- */
-const APP_VERSION = '3.14';
+const APP_VERSION = '3.13';
 const MODULOS = [
   { id:'irrigacao_cacau', titulo:'Monitoramento de Irrigação', sub:'Cacau', emoji:'💧', canto:'🍫', cor:'#2F4A2C', cultura:'cacau', tipo:'irrigacao' },
   { id:'irrigacao_coco', titulo:'Monitoramento de Irrigação', sub:'Coco', emoji:'💧', canto:'🥥', cor:'#1F5A78', cultura:'coco', tipo:'irrigacao' },
@@ -2414,8 +2414,8 @@ function wirePontoEventsCoco(v, onlyN){
 
 /* ---------------- FERTIRRIGAÇÃO (CAIXAS, LIMPEZA E FILTROS) ----------------
    Tudo fica no Firestore dentro da coleção "config" (mesma das aplicações):
-   - config/ferti            → caixas (receita, limpezas), escalas de preparo (cada versão vale a partir
-                               de uma segunda-feira), filtros, preparos por semana e as verificações de filtro (só texto).
+   - config/ferti            → caixas (receita, dias de preparo, limpezas), filtros, preparos por semana
+                               e as verificações de filtro (só texto).
    - config/fertiFoto_<id>   → fotos de cada verificação de filtro (carregadas só quando você abre). */
 const DIAS_SEMANA = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
 const DIAS_CURTO = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
@@ -2429,47 +2429,20 @@ const NIVEL_FILTRO = {
 };
 const FOTOS_FILTRO_MAX = 3;
 
-/* Escala de preparo: nº de caixas por dia da semana (0=domingo … 6=sábado), separado em diurno e noturno.
-   Cada versão vale a partir de uma segunda-feira — mudar a escala não mexe nas semanas anteriores. */
-const ESCALA_INICIO = '2000-01-03';
-const ESCALA_ORIGINAL = {      // planilha "Imprimir caixas" (valeu até 25/10/2026)
-  A:{ diurno:{2:4, 5:5},                noturno:{} },
-  B:{ diurno:{2:3, 4:4},                noturno:{} },
-  C:{ diurno:{2:5, 3:1, 4:5, 6:2},      noturno:{} },
-  D:{ diurno:{3:6, 4:2},                noturno:{} },
-  E:{ diurno:{1:4, 3:3},                noturno:{} },
-  F:{ diurno:{1:6, 2:4, 3:4, 4:2, 5:4}, noturno:{} }
-};
-const ESCALA_NOVA_DESDE = '2026-10-26';
-const ESCALA_26_10_2026 = {    // nova ordem de preparo
-  A:{ diurno:{2:4, 4:4},                noturno:{0:1} },       // as 5 de sexta: 4 na quinta + 1 no domingo à noite
-  B:{ diurno:{2:3, 5:4},                noturno:{} },          // as 4 de quinta passam para sexta
-  C:{ diurno:{2:5, 3:1, 4:5},           noturno:{2:1, 5:1} },  // as 2 de sábado: 1 terça à noite + 1 sexta à noite
-  D:{ diurno:{3:6, 4:2},                noturno:{} },
-  E:{ diurno:{1:4, 3:3},                noturno:{} },
-  F:{ diurno:{1:6, 2:4, 3:4, 4:2, 5:4}, noturno:{} }
-};
-const PERIODOS = ['diurno','noturno'];
-function copiaJSON(o){ return JSON.parse(JSON.stringify(o)); }
-function escalasPadrao(){
-  return [{ desde: ESCALA_INICIO, plano: copiaJSON(ESCALA_ORIGINAL) }, { desde: ESCALA_NOVA_DESDE, plano: copiaJSON(ESCALA_26_10_2026) }];
-}
-
 function fertiPadrao(){
-  // Receitas da planilha "Imprimir caixas".
-  const cx = (id, volume, adubos)=>({ id, volume, adubos: adubos.map(([nome,kg])=>({nome,kg})), ultimaLimpeza:'', limpezas:[] });
+  // Receita e escala de preparo da planilha "Imprimir caixas" (dia: nº de caixas preparadas).
+  const cx = (id, volume, adubos, dias)=>({ id, volume, adubos: adubos.map(([nome,kg])=>({nome,kg})), dias, ultimaLimpeza:'', limpezas:[] });
   return {
     caixas: [
-      cx('A', 400, [['Iron Complex',4],['Sulfato de Magnésio',125]]),
-      cx('B', 400, [['Ácido bórico',6],['MAP Purificado',50]]),
-      cx('C', 400, [['Nitrato de Cálcio',75]]),
-      cx('D', 300, [['Sulfato de Cobre',4.4],['Sulfato de Zinco',18],['Sulfato Manganês',18],['Uréia',45.9]]),
-      cx('E', 300, [['Iron Complex',1.8],['MAP Purificado',21],['Uréia',26.9]]),
-      cx('F', 300, [['Cloreto de Potássio',50]])
+      cx('A', 400, [['Iron Complex',4],['Sulfato de Magnésio',125]],                                   {2:4, 5:5}),
+      cx('B', 400, [['Ácido bórico',6],['MAP Purificado',50]],                                         {2:3, 4:4}),
+      cx('C', 400, [['Nitrato de Cálcio',75]],                                                         {2:5, 3:1, 4:5, 6:2}),
+      cx('D', 300, [['Sulfato de Cobre',4.4],['Sulfato de Zinco',18],['Sulfato Manganês',18],['Uréia',45.9]], {3:6, 4:2}),
+      cx('E', 300, [['Iron Complex',1.8],['MAP Purificado',21],['Uréia',26.9]],                        {1:4, 3:3}),
+      cx('F', 300, [['Cloreto de Potássio',50]],                                                       {1:6, 2:4, 3:4, 4:2, 5:4})
     ],
-    escalas: escalasPadrao(),
     filtros: [{ id:'f1', nome:'Filtro 1' }],
-    semanas: {},      // { 'AAAA-MM-DD' (segunda): { A: { '2': feitas de dia, '2n': feitas à noite, ... }, ... } }
+    semanas: {},      // { 'AAAA-MM-DD' (segunda): { A: { '2': feitas, ... }, ... } }
     verificacoes: []  // { id, data, filtroId, nivel, comentario, qtdFotos }
   };
 }
@@ -2487,50 +2460,15 @@ function fmtCurto(iso){ const [, m, d] = iso.split('-'); return `${d}/${m}`; }
 function fmtKg(n){ return String(n).replace('.', ','); }
 
 function fertiCaixa(id){ return state.ferti.caixas.find(c=>c.id===id); }
-/** Versão da escala que vale na semana que começa nessa segunda. */
-function escalaDaSemana(segunda){
-  const lista = state.ferti.escalas;
-  let e = lista[0];
-  for(const x of lista){ if(x.desde <= segunda) e = x; }
-  return e;
+function feitasNoDia(segunda, caixaId, dow){
+  const s = state.ferti.semanas[segunda]; return (s && s[caixaId] && Number(s[caixaId][dow])) || 0;
 }
-function planoCaixa(segunda, caixaId){
-  const p = escalaDaSemana(segunda).plano[caixaId] || {};
-  return { diurno: p.diurno || {}, noturno: p.noturno || {} };
-}
-function previstasNoDia(segunda, caixaId, dow, periodo){ return Number(planoCaixa(segunda, caixaId)[periodo][dow]) || 0; }
-function chavePreparo(dow, periodo){ return periodo==='noturno' ? dow+'n' : String(dow); }
-function feitasNoDia(segunda, caixaId, dow, periodo){
-  const s = state.ferti.semanas[segunda]; return (s && s[caixaId] && Number(s[caixaId][chavePreparo(dow, periodo)])) || 0;
-}
-function definirFeitas(segunda, caixaId, dow, periodo, n){
-  const chave = chavePreparo(dow, periodo);
+function definirFeitas(segunda, caixaId, dow, n){
   const sem = state.ferti.semanas[segunda] = state.ferti.semanas[segunda] || {};
   const cx = sem[caixaId] = sem[caixaId] || {};
-  if(n>0) cx[chave] = n; else delete cx[chave];
+  if(n>0) cx[dow] = n; else delete cx[dow];
   if(!Object.keys(cx).length) delete sem[caixaId];
   if(!Object.keys(sem).length) delete state.ferti.semanas[segunda];
-}
-/** A escala só muda daqui pra frente: se a versão em vigor começou antes desta semana, cria uma nova a partir desta segunda. */
-function escalaEditavel(){
-  const seg = segundaDaSemana(hojeISO());
-  const atual = escalaDaSemana(seg);
-  if(atual.desde === seg) return atual;
-  const nova = { desde: seg, plano: copiaJSON(atual.plano) };
-  state.ferti.escalas.push(nova);
-  state.ferti.escalas.sort((a,b)=> a.desde < b.desde ? -1 : (a.desde > b.desde ? 1 : 0));
-  return nova;
-}
-/** Preparos (caixa × período) previstos ou registrados num dia — os diurnos primeiro. */
-function preparosDoDia(segunda, dow){
-  const itens = [];
-  PERIODOS.forEach(per=>{
-    state.ferti.caixas.forEach(c=>{
-      const prev = previstasNoDia(segunda, c.id, dow, per), fe = feitasNoDia(segunda, c.id, dow, per);
-      if(prev || fe) itens.push({ c, per, prev, fe });
-    });
-  });
-  return itens;
 }
 
 /** Situação de um preparo previsto: ok / atrasado / hoje / previsto. */
@@ -2544,15 +2482,18 @@ function statusPreparo(prev, feitas, dataISO){
 function resumoSemanaFerti(segunda){
   let previstas=0, feitas=0, atrasadas=0, pendentes=0;
   const porCaixa = {};
-  state.ferti.caixas.forEach(c=>{ porCaixa[c.id] = { previstas:0, feitas:0 }; });
-  ORDEM_DIAS.forEach(dow=>{
-    const passou = dataDoDia(segunda, dow) < hojeISO();
-    preparosDoDia(segunda, dow).forEach(({c, prev, fe})=>{
-      porCaixa[c.id].previstas += prev; porCaixa[c.id].feitas += fe;
-      previstas += prev; feitas += fe;
+  state.ferti.caixas.forEach(c=>{
+    let p=0, f=0;
+    ORDEM_DIAS.forEach(dow=>{
+      const prev = Number(c.dias[dow])||0;
+      const fe = feitasNoDia(segunda, c.id, dow);
+      if(!prev && !fe) return;
+      p += prev; f += fe;
       const falta = Math.max(0, prev-fe);
-      if(falta){ if(passou) atrasadas += falta; else pendentes += falta; }
+      if(falta){ if(dataDoDia(segunda, dow) < hojeISO()) atrasadas += falta; else pendentes += falta; }
     });
+    porCaixa[c.id] = { previstas:p, feitas:f };
+    previstas += p; feitas += f;
   });
   return { previstas, feitas, atrasadas, pendentes, porCaixa };
 }
@@ -2576,13 +2517,7 @@ function badgeLimpezaHTML(st){
 }
 
 /* ---------- Firestore ---------- */
-function fertiParaFirestore(){
-  const d = copiaJSON(state.ferti);
-  // compatibilidade: aparelhos que ainda estão na v3.13 leem a escala diurna de dentro de cada caixa
-  const seg = segundaDaSemana(hojeISO());
-  d.caixas.forEach(c=>{ c.dias = copiaJSON(planoCaixa(seg, c.id).diurno); });
-  return d;
-}
+function fertiParaFirestore(){ return JSON.parse(JSON.stringify(state.ferti)); }
 async function salvarFertiFirestore(){
   try{ await setDoc(doc(db,'config','ferti'), fertiParaFirestore()); }
   catch(e){ console.error('Falha ao salvar fertirrigação no Firestore:', e); }
@@ -2594,30 +2529,16 @@ function agendarSalvarFerti(){
   timerSalvarFerti = setTimeout(async ()=>{ await salvarFertiFirestore(); state.fertiAlteradoLocal = false; }, 800);
   agendarAutoSyncSheets();
 }
-/** Coloca os dados do Firebase no app. Devolve true quando converteu dados da v3.13 (aí é preciso salvar). */
 function aplicarFerti(dados){
   const base = fertiPadrao();
-  if(!dados) { state.ferti = base; return false; }
-  const caixas = Array.isArray(dados.caixas) && dados.caixas.length ? dados.caixas : base.caixas;
-  let escalas = Array.isArray(dados.escalas) && dados.escalas.length ? dados.escalas : null, migrou = false;
-  if(!escalas){
-    // v3.13 guardava a escala dentro de cada caixa (só diurno): ela vira o histórico das semanas
-    // até 25/10/2026, e a nova ordem de preparo passa a valer a partir de 26/10/2026.
-    const antiga = {};
-    caixas.forEach(c=>{ antiga[c.id] = { diurno: copiaJSON(c.dias || {}), noturno: {} }; });
-    escalas = [{ desde: ESCALA_INICIO, plano: antiga }, { desde: ESCALA_NOVA_DESDE, plano: copiaJSON(ESCALA_26_10_2026) }];
-    migrou = true;
-  }
-  escalas.sort((a,b)=> a.desde < b.desde ? -1 : (a.desde > b.desde ? 1 : 0));
+  if(!dados) { state.ferti = base; return; }
   state.ferti = {
-    caixas,
-    escalas,
+    caixas: Array.isArray(dados.caixas) && dados.caixas.length ? dados.caixas : base.caixas,
     filtros: Array.isArray(dados.filtros) && dados.filtros.length ? dados.filtros : base.filtros,
     semanas: dados.semanas || {},
     verificacoes: Array.isArray(dados.verificacoes) ? dados.verificacoes : []
   };
-  state.ferti.caixas.forEach(c=>{ delete c.dias; c.adubos = c.adubos||[]; c.limpezas = c.limpezas||[]; c.ultimaLimpeza = c.ultimaLimpeza||''; });
-  return migrou;
+  state.ferti.caixas.forEach(c=>{ c.dias = c.dias||{}; c.adubos = c.adubos||[]; c.limpezas = c.limpezas||[]; c.ultimaLimpeza = c.ultimaLimpeza||''; });
 }
 /** Carrega do Firebase (ou da cópia do aparelho, sem internet). */
 async function carregarFerti(){
@@ -2626,9 +2547,8 @@ async function carregarFerti(){
     try{ d = await comPrazo(getDoc(doc(db,'config','ferti')), 8000); }
     catch(e){ d = await getDocFromCache(doc(db,'config','ferti')); }
     if(state.fertiAlteradoLocal) return true; // não sobrescreve o que acabou de ser digitado
-    const migrou = aplicarFerti(d.exists() ? d.data() : null);
+    aplicarFerti(d.exists() ? d.data() : null);
     state.fertiCarregado = true;
-    if(migrou) salvarFertiFirestore();   // grava a escala nova uma vez, para todos os aparelhos
     return true;
   }catch(e){
     console.warn('Fertirrigação: ainda sem dados do Firebase', e);
@@ -2658,12 +2578,14 @@ async function salvarFotosVerificacao(id, fotos){
 function buildFertiPreparos(){
   const rows = [];
   Object.keys(state.ferti.semanas).sort().forEach(seg=>{
-    ORDEM_DIAS.forEach(dow=>{
-      const data = dataDoDia(seg, dow);
-      preparosDoDia(seg, dow).forEach(({c, per, prev, fe})=>{
+    state.ferti.caixas.forEach(c=>{
+      ORDEM_DIAS.forEach(dow=>{
+        const prev = Number(c.dias[dow])||0, fe = feitasNoDia(seg, c.id, dow);
+        if(!prev && !fe) return;
+        const data = dataDoDia(seg, dow);
         const st = statusPreparo(prev, fe, data);
-        rows.push({ Semana: seg, Data: data, Dia: DIAS_SEMANA[dow], Periodo: per==='noturno'?'Noturno':'Diurno', Caixa: c.id,
-          Previstas: prev, Preparadas: fe, Situacao: st==='ok'?'Preparada':(st==='atrasado'?'Atrasada':'Pendente') });
+        rows.push({ Semana: seg, Data: data, Dia: DIAS_SEMANA[dow], Caixa: c.id, Previstas: prev, Preparadas: fe,
+          Situacao: st==='ok'?'Preparada':(st==='atrasado'?'Atrasada':'Pendente') });
       });
     });
   });
@@ -2742,25 +2664,20 @@ function fertiSemanaHTML(){
     </div>`;
   ORDEM_DIAS.forEach(dow=>{
     const data = dataDoDia(seg, dow);
-    const itens = preparosDoDia(seg, dow);
+    const itens = state.ferti.caixas.filter(c=>(Number(c.dias[dow])||0) > 0 || feitasNoDia(seg, c.id, dow) > 0);
     if(!itens.length) return;
-    const temNoite = itens.some(i=>i.per==='noturno');
     html += `<div class="section-title">${DIAS_SEMANA[dow]} · ${fmtCurto(data)}${data===hoje?' · HOJE':''}<span class="rule"></span></div>
       <div class="card" style="padding:4px 14px;">`;
-    let perAtual = null;
-    itens.forEach(({c, per, prev, fe})=>{
-      if(temNoite && per !== perAtual){   // só separa diurno/noturno nos dias que têm preparo à noite
-        perAtual = per;
-        html += `<p style="margin:0;padding:8px 0 2px;font-size:0.68rem;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;color:${per==='noturno'?'#34406B':'var(--ink-soft)'};">${per==='noturno'?'🌙 Preparo noturno':'☀️ Preparo diurno'}</p>`;
-      }
+    itens.forEach(c=>{
+      const prev = Number(c.dias[dow])||0, fe = feitasNoDia(seg, c.id, dow);
       const st = statusPreparo(prev, fe, data);
       const badge = st==='ok' ? `<span class="badge ok">✓ preparada${fe>prev?` (+${fe-prev} extra)`:''}</span>`
         : st==='atrasado' ? `<span class="badge danger">⛔ atrasada · falta ${prev-fe}</span>`
-        : st==='hoje' ? `<span class="badge dupla">${per==='noturno'?'hoje à noite':'hoje'} · falta ${prev-fe}</span>`
+        : st==='hoje' ? `<span class="badge dupla">hoje · falta ${prev-fe}</span>`
         : `<span class="badge pending">prevista</span>`;
       html += `
-        <div class="row-item" data-cx="${escAttr(c.id)}" data-dow="${dow}" data-per="${per}"${per==='noturno'?' style="border-left:3px solid #34406B;padding-left:9px;"':''}>
-          <div class="lbl">Caixa ${escHTML(c.id)}${per==='noturno'?' 🌙':''} <span style="font-weight:400;color:var(--ink-soft);">· ${c.volume} L · previstas ${prev}</span>
+        <div class="row-item" data-cx="${escAttr(c.id)}" data-dow="${dow}">
+          <div class="lbl">Caixa ${escHTML(c.id)} <span style="font-weight:400;color:var(--ink-soft);">· ${c.volume} L · previstas ${prev}</span>
             <span class="sub">${c.adubos.map(a=>`${escHTML(a.nome)} ${fmtKg(a.kg)} kg`).join(' + ')}</span>
             <div style="margin-top:4px;">${badge}</div>
           </div>
@@ -2773,7 +2690,7 @@ function fertiSemanaHTML(){
     });
     html += `</div>`;
   });
-  html += `<div style="font-size:0.72rem;color:var(--ink-soft);text-align:center;margin-top:6px;">Use o + a cada caixa preparada. A escala (dias, quantidades e período) é ajustada na aba ⚙️ Caixas.</div>`;
+  html += `<div style="font-size:0.72rem;color:var(--ink-soft);text-align:center;margin-top:6px;">Use o + a cada caixa preparada. A escala (dias e quantidades) é ajustada na aba ⚙️ Caixas.</div>`;
   return html;
 }
 function wireFertiSemana(){
@@ -2781,10 +2698,10 @@ function wireFertiSemana(){
   document.getElementById('fsProx').onclick = ()=>{ state.fertiSemana = somaDias(state.fertiSemana, 7); render(); };
   const bh = document.getElementById('fsHoje'); if(bh) bh.onclick = ()=>{ state.fertiSemana = segundaDaSemana(hojeISO()); render(); };
   document.querySelectorAll('.row-item[data-cx]').forEach(row=>{
-    const cx = row.dataset.cx, dow = row.dataset.dow, per = row.dataset.per;
+    const cx = row.dataset.cx, dow = row.dataset.dow;
     const mudar = (delta)=>{
-      const atual = feitasNoDia(state.fertiSemana, cx, dow, per);
-      definirFeitas(state.fertiSemana, cx, dow, per, Math.max(0, atual+delta));
+      const atual = feitasNoDia(state.fertiSemana, cx, dow);
+      definirFeitas(state.fertiSemana, cx, dow, Math.max(0, atual+delta));
       agendarSalvarFerti();
       renderMantendoScroll();
     };
@@ -3015,16 +2932,9 @@ function wireFertiFiltros(){
 
 /* ----- Caixas: receita, volume, escala de preparo e filtros cadastrados ----- */
 function fertiCaixasHTML(){
-  const segAtual = segundaDaSemana(hojeISO());
-  const esc = escalaDaSemana(segAtual);
-  let html = `
-    <div class="card" style="padding:10px 14px;font-size:0.8rem;color:var(--ink-soft);">
-      📋 ${esc.desde===ESCALA_INICIO ? 'Escala de preparo original' : `Escala de preparo em vigor desde <strong style="color:var(--ink);">${fmtBR(esc.desde)}</strong>`}.
-      Mudanças aqui valem a partir desta semana — as semanas anteriores continuam com a escala que estava valendo.
-    </div>`;
+  let html = '';
   state.ferti.caixas.forEach(c=>{
-    const plano = planoCaixa(segAtual, c.id);
-    const total = PERIODOS.reduce((s,per)=> s + ORDEM_DIAS.reduce((t,d)=> t + (Number(plano[per][d])||0), 0), 0);
+    const total = ORDEM_DIAS.reduce((s,d)=>s+(Number(c.dias[d])||0),0);
     html += `
       <div class="card" data-cfg="${escAttr(c.id)}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
@@ -3033,13 +2943,12 @@ function fertiCaixasHTML(){
         </div>
         <div class="field-row"><label>Volume (L)</label><input type="number" inputmode="decimal" data-role="cfg-vol" value="${c.volume}"></div>
         <label style="font-size:0.72rem;font-weight:700;color:var(--ink-soft);text-transform:uppercase;display:block;margin-bottom:4px;">Caixas preparadas por dia</label>
-        <div style="display:grid;grid-template-columns:52px repeat(7,minmax(0,1fr));gap:4px;align-items:center;margin-bottom:12px;">
-          <div></div>
-          ${ORDEM_DIAS.map(d=>`<div style="text-align:center;font-size:0.68rem;color:var(--ink-soft);font-weight:700;">${DIAS_CURTO[d]}</div>`).join('')}
-          ${PERIODOS.map(per=>`
-            <div style="font-size:0.68rem;font-weight:700;color:${per==='noturno'?'#34406B':'var(--ink-soft)'};">${per==='noturno'?'🌙 Noite':'☀️ Dia'}</div>
-            ${ORDEM_DIAS.map(d=>`<input type="number" inputmode="numeric" min="0" data-role="cfg-dia" data-dow="${d}" data-per="${per}" value="${Number(plano[per][d])||''}" placeholder="0"
-              style="width:100%;min-width:0;border:1.5px solid var(--line);border-radius:6px;padding:6px 2px;text-align:center;font-family:var(--font-mono);${per==='noturno'?'background:#EEF0F7;':''}">`).join('')}`).join('')}
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:12px;">
+          ${ORDEM_DIAS.map(d=>`<div style="text-align:center;">
+            <div style="font-size:0.68rem;color:var(--ink-soft);font-weight:700;">${DIAS_CURTO[d]}</div>
+            <input type="number" inputmode="numeric" min="0" data-role="cfg-dia" data-dow="${d}" value="${Number(c.dias[d])||''}" placeholder="0"
+              style="width:100%;border:1.5px solid var(--line);border-radius:6px;padding:6px 2px;text-align:center;font-family:var(--font-mono);">
+          </div>`).join('')}
         </div>
         <label style="font-size:0.72rem;font-weight:700;color:var(--ink-soft);text-transform:uppercase;display:block;margin-bottom:4px;">Adubos (receita)</label>
         ${c.adubos.map((a,i)=>`
@@ -3071,11 +2980,7 @@ function wireFertiCaixas(){
     card.querySelectorAll('[data-role="cfg-dia"]').forEach(inp=>{
       inp.addEventListener('change', e=>{
         const n = Math.max(0, Math.round(Number(e.target.value)||0));
-        const esc = escalaEditavel();
-        const pl = esc.plano[c.id] = esc.plano[c.id] || { diurno:{}, noturno:{} };
-        const per = inp.dataset.per;
-        pl[per] = pl[per] || {};
-        if(n) pl[per][inp.dataset.dow] = n; else delete pl[per][inp.dataset.dow];
+        if(n) c.dias[inp.dataset.dow] = n; else delete c.dias[inp.dataset.dow];
         salvar(); renderMantendoScroll();
       });
     });
